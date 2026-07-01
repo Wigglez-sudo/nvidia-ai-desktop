@@ -1,5 +1,5 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.0.1';
 const BUILD_ID = '2025-06-consolidated';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
@@ -253,32 +253,52 @@ function recordStreamEvent(msg, label, details = '') {
 function recordRawStreamSample(msg, sample) {
   const debug = ensureStreamDebug(msg);
   if (!debug) return;
-  const text = shortText(sample, 900);
-  if (text.trim()) debug.rawSamples.push(text);
-  if (debug.rawSamples.length > 12) debug.rawSamples.shift();
+  // Keep a tiny sample buffer for optional exported diagnostics, but do not render
+  // raw payloads in chat. Luke only wants the readable event timeline in the UI.
+  const text = shortText(sample, 400);
+  if (text.trim() && debug.rawSamples.length < 3) debug.rawSamples.push(text);
 }
 
-function streamDebugHtml(msg) {
-  if (!state.settings.streamDiagnostics || !msg.debug) return '';
+function streamDebugSummary(msg) {
+  if (!msg?.debug) return '';
   const d = msg.debug;
   const c = d.counters || {};
   const http = d.http || {};
   const elapsed = ((Date.now() - (d.startedAt || Date.now())) / 1000).toFixed(1) + 's';
-  const summary = [
-    `elapsed ${elapsed}`,
-    http.status ? `HTTP ${http.status}` : 'waiting for headers',
-    http.contentType ? `type ${http.contentType}` : '',
-    `chunks ${c.chunks || 0}`,
-    `SSE ${c.sseEvents || 0}`,
-    `JSON ${c.jsonEvents || 0}`,
-    `text Δ ${c.contentDeltas || 0}`,
-    `thinking Δ ${c.reasoningDeltas || 0}`,
-    `empty Δ ${c.emptyDeltas || 0}`
+  return [
+    elapsed,
+    http.status ? `HTTP ${http.status}` : 'waiting',
+    `${c.chunks || 0} chunks`,
+    `${c.sseEvents || 0} SSE`,
+    `${c.jsonEvents || 0} JSON`,
+    `${c.contentDeltas || 0} text`,
+    `${c.reasoningDeltas || 0} thinking`
   ].filter(Boolean).join(' • ');
-  const req = d.request ? `<pre>${escapeHtml(JSON.stringify(d.request, null, 2))}</pre>` : '';
-  const events = (d.events || []).map(e => `<div><strong>${escapeHtml(e.t)}</strong> ${escapeHtml(e.label)}${e.details ? ` — ${escapeHtml(e.details)}` : ''}</div>`).join('') || '<div>No events yet.</div>';
-  const raw = (d.rawSamples || []).map((r, i) => `<details><summary>Raw sample ${i + 1}</summary><pre>${escapeHtml(r)}</pre></details>`).join('') || '<div>No raw stream samples yet.</div>';
-  return `<details class="stream-debug-block" open><summary>🔎 Stream / reasoning diagnostics — ${escapeHtml(summary)}</summary><div class="stream-debug-inner"><h4>Request</h4>${req}<h4>Events</h4>${events}<h4>Raw chunks / SSE payloads</h4>${raw}</div></details>`;
+}
+
+function streamEventsListHtml(msg) {
+  if (!state.settings.streamDiagnostics || !msg?.debug) return '';
+  const events = msg.debug.events || [];
+  if (!events.length) return `<div class="stream-events-empty">No stream events yet.</div>`;
+  return `<div class="stream-events-list">${events.map(e => `<div class="stream-event"><strong>${escapeHtml(e.t)}</strong><span>${escapeHtml(e.label)}${e.details ? ` — ${escapeHtml(e.details)}` : ''}</span></div>`).join('')}</div>`;
+}
+
+function thinkingDetailsHtml(msg) {
+  if (!msg || msg.role === 'user') return '';
+  const hasThinking = state.settings.showThinking && !!msg.thinking;
+  const hasEvents = state.settings.streamDiagnostics && !!msg.debug;
+  if (!hasThinking && !hasEvents) return '';
+  const summary = streamDebugSummary(msg) || (msg.loading ? 'working' : 'complete');
+  const thinkingText = hasThinking ? `<div class="thinking-section-title">Public reasoning / plugin notes</div><div class="thinking-public-text">${escapeHtml(msg.thinking)}</div>` : '';
+  const eventText = hasEvents ? `<div class="thinking-section-title">Event timeline</div>${streamEventsListHtml(msg)}` : '';
+  return `<details class="thinking-block thinking-details"><summary class="thinking-header"><span>🧠</span><div class="thinking-title">Thinking</div><span class="thinking-toggle">${escapeHtml(summary)}</span></summary><div class="thinking-body">${thinkingText}${eventText}</div></details>`;
+}
+
+function streamDebugHtml(msg) {
+  // Kept as a compatibility alias for older call sites. The UI now shows only
+  // the readable event timeline inside the collapsed Thinking block, not raw
+  // request JSON or raw SSE payloads.
+  return thinkingDetailsHtml(msg);
 }
 
 function appendPublicReasoning(msg, text) {
@@ -703,8 +723,8 @@ function messageHtml(m, idx) {
   const content = m.loading && !visibleContent ? thinkingHtml(m.status || 'Thinking') : renderMarkdown(visibleContent);
   const generatedFiles = (!isUser && visibleContent && state.settings.plugins.downloadButtons) ? generatedFilesPanelHtml(visibleContent) : '';
   const attachments = isUser ? attachmentSummaryHtml(m.attachments || []) : '';
-  const thinking = (!isUser && m.thinking) ? `<div class="thinking-block expanded"><div class="thinking-header"><span>🧠</span><div class="thinking-title">Thinking</div></div><div class="thinking-body" style="display:block;">${escapeHtml(m.thinking)}</div></div>` : '';
-  const debug = !isUser ? streamDebugHtml(m) : '';
+  const thinking = !isUser ? thinkingDetailsHtml(m) : '';
+  const debug = '';
   return `<div class="message" id="msg_${escapeAttr(m.id)}">
     <div class="message-avatar ${isUser ? 'user' : 'assistant'}">${escapeHtml(avatar)}</div>
     <div class="message-content">
@@ -1522,8 +1542,8 @@ function extractDelta(json) {
 function updateAssistantDom(msg) {
   const body = document.getElementById(`body_${msg.id}`);
   if (body) {
-    const thinking = (state.settings.showThinking && msg.thinking) ? `<div class="thinking-block expanded"><div class="thinking-header"><span>🧠</span><div class="thinking-title">Thinking</div></div><div class="thinking-body" style="display:block;">${escapeHtml(msg.thinking)}</div></div>` : '';
-    const debug = streamDebugHtml(msg);
+    const thinking = thinkingDetailsHtml(msg);
+    const debug = '';
     const progress = msg.loading && !msg.content ? thinkingHtml(msg.status || 'Thinking') : '';
     const generatedFiles = (msg.content && state.settings.plugins.downloadButtons) ? generatedFilesPanelHtml(msg.content) : '';
     body.innerHTML = thinking + debug + generatedFiles + (msg.content ? renderMarkdown(msg.content) : progress);

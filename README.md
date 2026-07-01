@@ -7,11 +7,11 @@ A Kimi/Qwen-Studio-style NVIDIA AI chat app that runs as a static site on **GitH
 - Live site: https://wigglez-sudo.github.io/nvidia-ai-desktop/
 - Worker: https://nvidia-ai-proxy.lukewai.workers.dev
 
-This is **v3.0.0**, a consolidation/stability pass. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was hardened and cleaned up, and the crash that was breaking the chat was fixed.
+This is **v3.0.1**, a consolidation/stability pass. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was hardened and cleaned up, and the crash that was breaking the chat was fixed.
 
 ---
 
-## What changed in v3.0.0
+## What changed in v3.0.1
 
 **Critical fix**
 - Fixed the bug that broke the whole chat: `messageHtml` referenced an undefined `debug` variable, throwing `ReferenceError` on every message render. The app worked on the empty welcome screen but broke the instant any chat had messages (and it silently aborted startup, so the service worker never registered). This was patch drift — an earlier version defined `const debug = streamDebugHtml(m)` and a later patch dropped the line.
@@ -28,6 +28,7 @@ This is **v3.0.0**, a consolidation/stability pass. The proven engine (streaming
 - **Clear cache & reload latest** button (in Diagnostics) — unregisters the service worker, clears caches, and reloads with a cache-buster. Fixes the recurring "GitHub updated but I still see the old version" problem.
 - **App version badge** shown in the sidebar footer.
 - **Diagnostics & Status panel** (click your name/status at the bottom-left): app/build version, service-worker state, Worker version + routes (Probe Worker), model/free-endpoint counts, last request status/content-type/error, and test buttons: Test NVIDIA models, Test chat completion, Test web search, Test build catalog, Export debug logs.
+- **Compact Thinking timeline** — stream/reasoning events now appear inside one collapsed `Thinking` block. Raw request JSON and raw SSE payloads no longer flood the chat view.
 - **Download all generated files as ZIP** (plus Copy all) — a real, dependency-free ZIP, not a burst of individual downloads.
 - **Chat management**: rename, pin (pinned chats float to the top), search, and delete — all from the sidebar.
 - **Settings import/export** (JSON), with a prompt for whether to include secrets.
@@ -64,7 +65,7 @@ index.worker.js
 Commit and wait for Pages to deploy. Then open with a cache-buster:
 
 ```
-https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=v3
+https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=thinking-compact
 ```
 
 If you ever see a stale version again, just click **Clear cache & reload latest** in the Diagnostics panel (bottom-left of the sidebar).
@@ -117,9 +118,9 @@ Do **not** add `/v1/models`, `/v1/chat/completions`, etc. — the app appends pa
 
 ## Test checklist
 
-After uploading + deploying, open the site with `?v=v3` and check:
+After uploading + deploying, open the site with `?v=thinking-compact` and check:
 
-1. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.0`.
+1. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.1`.
 2. Settings → **Test Connection** loads models.
 3. Model picker → **Refresh**; the **Free Endpoint** and **API Available** tabs have models.
 4. Send a message → a reply renders (this is the path that used to be broken).
@@ -136,7 +137,7 @@ After uploading + deploying, open the site with `?v=v3` and check:
 
 ## Known limitations
 
-- **Public reasoning only.** The app shows model "thinking" only when NVIDIA actually returns it (`reasoning`, `reasoning_content`, or visible `<think>` blocks). Hidden chain-of-thought cannot be forced; if a model doesn't expose it, the reasoning panel stays empty. Stream Diagnostics tells you which case you're in.
+- **Public reasoning only.** The app shows model "thinking" only when NVIDIA actually returns it (`reasoning`, `reasoning_content`, or visible `<think>` blocks). Hidden chain-of-thought cannot be forced. Stream/reasoning event data is shown in the collapsed Thinking timeline; raw request/SSE payloads are intentionally hidden from the chat UI.
 - **Free Endpoint ≠ chat-capable.** Some Free-Endpoint models are image/speech/OCR/safety/embedding models. If you pick a catalog-only or non-chat model, the app warns you but NVIDIA may still reject the request.
 - **Catalog-only models** appear from the Build catalog scrape but weren't returned by `/v1/models`; they may need a different exact model ID or may not work with your key.
 - **Code Interpreter** is intentionally disabled — a browser-only GitHub Pages site can't safely run a sandbox. It would need a real backend.
