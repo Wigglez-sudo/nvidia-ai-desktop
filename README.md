@@ -7,7 +7,7 @@ A Kimi/Qwen-Studio-style NVIDIA AI chat app that runs as a static site on **GitH
 - Live site: https://wigglez-sudo.github.io/nvidia-ai-desktop/
 - Worker: https://nvidia-ai-proxy.lukewai.workers.dev
 
-This is **v3.0.6**, a small settings persistence patch on top of the v3.0.5 iOS layout baseline. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was patched in place without a rewrite.
+This is **v3.0.7**, an onboarding and force-update patch on top of the v3.0.6 settings persistence baseline. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was patched in place without a rewrite.
 
 ---
 
@@ -65,7 +65,7 @@ index.worker.js
 Commit and wait for Pages to deploy. Then open with a cache-buster:
 
 ```
-https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.0.6
+https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.0.7
 ```
 
 If you ever see a stale version again, just click **Clear cache & reload latest** in the Diagnostics panel (bottom-left of the sidebar).
@@ -74,7 +74,7 @@ If you ever see a stale version again, just click **Clear cache & reload latest*
 
 ## Deploy the Cloudflare Worker
 
-The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.0.6. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
+The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.0.7. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
 
 Copy it to your local Wrangler project and deploy:
 
@@ -118,22 +118,25 @@ Do **not** add `/v1/models`, `/v1/chat/completions`, etc. — the app appends pa
 
 ## Test checklist
 
-After uploading, open the site with `?v=3.0.6` and check:
+After uploading, open the site with `?v=3.0.7` and check:
 
-1. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.6`.
-2. Settings → **Test Connection** loads models.
-3. Model picker → **Refresh**; the **Free Endpoint** and **API Available** tabs have models.
-4. Send a message → a reply renders (this is the path that used to be broken).
-5. Ask for "the full files, each in its own fenced block with `filename:` as the first line" → **Generated files** cards appear with Copy/Download, and **Download all as ZIP** for multi-file replies.
-6. Attach multiple files and drag/drop files → attachment chips only (no pasted file text in the chat).
-7. Edit a sent message; Regenerate a reply.
-8. Rename, pin, search, and delete chats in the sidebar.
-9. Diagnostics → **Probe Worker**, **Test chat completion**, **Test build catalog**; turn on Web Search and **Test web search**.
-10. Settings → **Export settings** / **Import settings**.
-11. On iPhone/Safari: the top toolbar sits below the status/dynamic-island area, the sidebar opens as a drawer with a backdrop, and the model picker sits above the keyboard.
-12. Enable **Stream Diagnostics** and send to a reasoning model (e.g. a Nemotron/DeepSeek/Qwen/GLM); the diagnostics block shows chunk/SSE/JSON/content/reasoning counters.
-13. Click **Regenerate** on an assistant reply, then click **Stop** while it is responding; the active regenerated request stops and keeps any partial text.
-14. Save Settings with an NVIDIA API key and Worker URL, refresh the page, then reopen Settings; both fields should still be populated.
+1. Startup splash appears with `Created by Wigglez + Claude + ChatGPT Codex`.
+2. Splash **Save, Load Models & Enter** saves the NVIDIA key and Worker URL, pulls models, and closes into the app.
+3. Top-right **Force update** clears service-worker/cache storage and reloads with a fresh cache-buster.
+4. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.7`.
+5. Settings → **Test Connection** loads models.
+6. Model picker → **Refresh**; the **Free Endpoint** and **API Available** tabs have models.
+7. Send a message → a reply renders (this is the path that used to be broken).
+8. Ask for "the full files, each in its own fenced block with `filename:` as the first line" → **Generated files** cards appear with Copy/Download, and **Download all as ZIP** for multi-file replies.
+9. Attach multiple files and drag/drop files → attachment chips only (no pasted file text in the chat).
+10. Edit a sent message; Regenerate a reply.
+11. Rename, pin, search, and delete chats in the sidebar.
+12. Diagnostics → **Probe Worker**, **Test chat completion**, **Test build catalog**; turn on Web Search and **Test web search**.
+13. Settings → **Export settings** / **Import settings**.
+14. On iPhone/Safari: the top toolbar sits below the status/dynamic-island area, the sidebar opens as a drawer with a backdrop, and the model picker sits above the keyboard.
+15. Enable **Stream Diagnostics** and send to a reasoning model (e.g. a Nemotron/DeepSeek/Qwen/GLM); the diagnostics block shows chunk/SSE/JSON/content/reasoning counters.
+16. Click **Regenerate** on an assistant reply, then click **Stop** while it is responding; the active regenerated request stops and keeps any partial text.
+17. Save Settings with an NVIDIA API key and Worker URL, refresh the page, then reopen Settings; both fields should still be populated.
 
 ---
 
@@ -199,4 +202,13 @@ No Cloudflare Worker change is required for this patch unless you want to redepl
 - Restores the connection settings from the backup if the main settings blob is missing or incomplete.
 - Clear all local data now removes the connection backup too.
 - Bumped the service-worker cache to `nvidia-ai-desktop-v3-0-6`.
+- No Cloudflare Worker change is required for this frontend-only patch.
+
+## v3.0.7 — Splash setup + force update
+
+- Added an interactive startup splash screen with `Created by Wigglez + Claude + ChatGPT Codex`.
+- Splash lets the user enter the NVIDIA API key and Worker URL before starting, then saves settings, loads models, and enters the app.
+- Added a visible top-bar **Force update** button that unregisters the service worker, clears caches, and reloads with a fresh cache-buster.
+- Splash includes a **Force Update** button for stale iOS/desktop cache recovery before entering the app.
+- Bumped the service-worker cache to `nvidia-ai-desktop-v3-0-7`.
 - No Cloudflare Worker change is required for this frontend-only patch.

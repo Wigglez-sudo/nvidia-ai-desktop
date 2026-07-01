@@ -1,10 +1,11 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.6';
-const BUILD_ID = '2026-07-ios-settings-persistence';
+const APP_VERSION = '3.0.7';
+const BUILD_ID = '2026-07-splash-force-update';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
 const SETTINGS_SECRET_BACKUP_KEY = 'nvidia_ai_desktop_connection_backup_v1';
+const SPLASH_SEEN_KEY = 'nvidia_ai_desktop_splash_seen_v1';
 const MODEL_CACHE_KEY = 'nvidia_ai_desktop_live_models_v8_plugins';
 const FAV_KEY = 'nvidia_ai_desktop_favourites_v8_plugins';
 const CHATS_KEY = 'nvidia_ai_desktop_chats_v8_plugins';
@@ -1909,8 +1910,10 @@ async function refreshModelsFromNvidia(manual = false) {
     if (manual) showToast(`Loaded ${state.liveModels.length} models (${freeCount} Free Endpoint)`);
     return state.liveModels.length;
   } catch (err) {
-    setModelMeta(`Could not refresh models: ${friendlyError(err)}`);
-    if (manual) showToast(friendlyError(err), 'error');
+    const message = friendlyError(err);
+    state.diag.lastError = message;
+    setModelMeta(`Could not refresh models: ${message}`);
+    if (manual) showToast(message, 'error');
     return 0;
   }
 }
@@ -1977,6 +1980,65 @@ function updateSelectedModelLabel() {
   const model = getCurrentModel();
   const label = document.getElementById('selectedModelName');
   if (label) label.textContent = model ? model.name : 'Load models';
+}
+
+function setSplashStatus(text, success = true) {
+  const el = document.getElementById('splashStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('error', !success);
+  el.classList.toggle('success', !!success);
+}
+
+function populateSplashFields() {
+  const api = document.getElementById('splashApiKey');
+  const proxy = document.getElementById('splashProxyUrl');
+  if (api) api.value = state.settings.apiKey || '';
+  if (proxy) proxy.value = state.settings.proxyUrl || DEFAULT_PROXY_URL;
+  setSplashStatus(state.liveModels.length ? `${state.liveModels.length} models loaded. Ready.` : 'Your key is stored only in this browser.', true);
+}
+
+function openSplash() {
+  populateSplashFields();
+  document.getElementById('startupSplash')?.classList.add('open');
+}
+
+function closeSplash() {
+  try { localStorage.setItem(SPLASH_SEEN_KEY, APP_VERSION); } catch (_) {}
+  document.getElementById('startupSplash')?.classList.remove('open');
+}
+
+function shouldShowSplash() {
+  let seen = '';
+  try { seen = localStorage.getItem(SPLASH_SEEN_KEY) || ''; } catch (_) {}
+  return seen !== APP_VERSION || !state.settings.apiKey || !state.settings.proxyUrl || !state.liveModels.length;
+}
+
+function saveSplashConnectionSettings() {
+  const api = document.getElementById('splashApiKey');
+  const proxy = document.getElementById('splashProxyUrl');
+  state.settings.apiKey = (api?.value || '').trim();
+  state.settings.proxyUrl = stripSlash(proxy?.value || DEFAULT_PROXY_URL);
+  persistSettings();
+  updateStatus();
+  updateSendButton();
+}
+
+async function splashLoadAndEnter() {
+  saveSplashConnectionSettings();
+  if (!state.settings.apiKey) {
+    setSplashStatus('Add your NVIDIA API key first.', false);
+    return;
+  }
+  setSplashStatus('Saving settings and loading NVIDIA models...', true);
+  const count = await refreshModelsFromNvidia(false);
+  if (!count) {
+    setSplashStatus(state.diag.lastError || 'Could not load models. Check your key and Worker URL.', false);
+    return;
+  }
+  setSplashStatus(`Loaded ${count} models. Entering app...`, true);
+  closeSplash();
+  renderAll();
 }
 
 function openSettings() {
@@ -2361,7 +2423,8 @@ function clearAllLocalData() {
 }
 
 async function clearCacheAndReload() {
-  showDiagStatus('Clearing caches and service worker…', true);
+  showDiagStatus('Clearing caches and service worker...', true);
+  setSplashStatus('Clearing app cache and loading the newest GitHub Pages build...', true);
   try {
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -2373,7 +2436,7 @@ async function clearCacheAndReload() {
     }
   } catch (_) {}
   const url = new URL(location.href);
-  url.searchParams.set('v', Date.now().toString(36));
+  url.searchParams.set('v', `${APP_VERSION}-${Date.now().toString(36)}`);
   location.replace(url.toString());
 }
 
@@ -2594,6 +2657,9 @@ const CLICK_ACTIONS = {
   'close-sidebar': () => collapseSidebar(),
   'export-pdf': () => exportToPDF(),
   'share': () => shareChat(),
+  'open-splash': () => openSplash(),
+  'splash-enter': () => { saveSplashConnectionSettings(); closeSplash(); },
+  'splash-load-enter': () => splashLoadAndEnter(),
   'open-settings': () => openSettings(),
   'close-settings': () => closeSettings(),
   'save-settings': () => saveSettings(),
@@ -2736,6 +2802,7 @@ function init() {
   if (isMobile()) collapseSidebar();
   renderAll();
   registerServiceWorker();
+  if (shouldShowSplash()) openSplash();
 }
 
 // Kept on window for console/debugging convenience and maximum backward safety.
@@ -2749,9 +2816,11 @@ Object.assign(window, {
   toggleSidebar, handleFileSelect, addFilesToPending, removePendingAttachment, clearPendingAttachments,
   refreshModelsFromNvidia, switchModelTab, selectModel, toggleFavourite,
   openSettings, closeSettings, saveSettings, testConnection, clearApiKey,
+  openSplash, closeSplash, splashLoadAndEnter,
   exportSettings, importSettings, exportDebugLogs, clearCacheAndReload, clearAllLocalData,
   probeWorker, diagTestModels, diagTestChat, diagTestSearch, diagTestCatalog,
 });
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
+
