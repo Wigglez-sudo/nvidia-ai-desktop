@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.7';
-const BUILD_ID = '2026-07-splash-force-update';
+const APP_VERSION = '3.0.8';
+const BUILD_ID = '2026-07-artifacts-file-workspace';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
@@ -151,6 +151,8 @@ const DEFAULT_PLUGINS = {
   webSearchSafe: 'moderate',
   fileReader: true,
   downloadButtons: true,
+  preferFileOutputs: true,
+  artifactPreview: true,
   thinkingDisplay: true,
   longContext: false,
   codeInterpreter: false
@@ -902,31 +904,67 @@ function extractCodeBlockMeta(langRaw, codeRaw, before = '') {
 }
 
 function generatedFilesPanelHtml(text) {
-  // Use inferred filenames too. Many models output plain fenced code blocks even when
-  // asked for files; this still gives Luke copy/download cards instead of doing nothing.
   const files = parseGeneratedFilesFromMarkdown(text, { includeInferred: true });
   if (!files.length) return '';
   const allPayload = files.map(f => ({ filename: f.filename, code: f.code, lang: f.lang }));
   const allPayloadId = storeGeneratedPayload(allPayload);
+  const canPreview = state.settings.plugins.artifactPreview && canPreviewFiles(allPayload);
   const explicitCount = files.filter(f => f.explicit).length;
-  const label = explicitCount ? 'Generated files' : 'Copyable code files';
+  const label = explicitCount ? 'Artifacts' : 'Copyable code files';
   const sublabel = explicitCount
     ? `${files.length} file${files.length === 1 ? '' : 's'} detected from the model response`
     : `${files.length} code block${files.length === 1 ? '' : 's'} made downloadable with safe filenames`;
   const cards = files.map(f => {
     const singlePayloadId = storeGeneratedPayload({ filename: f.filename, code: f.code, lang: f.lang });
+    const kind = fileKind(f);
     return `<div class="generated-file-card ${f.explicit ? '' : 'inferred-file'}">
-      <div class="generated-file-icon">${f.explicit ? '📄' : '💻'}</div>
-      <div class="generated-file-info"><div class="generated-file-name">${escapeHtml(f.filename)}</div><div class="generated-file-meta">${escapeHtml(f.lang)} · ${formatBytes(new Blob([f.code]).size)}${f.explicit ? '' : ' · inferred filename'}</div></div>
-      <div class="generated-file-actions"><button class="file-btn" data-action="copy-code" data-payload-id="${singlePayloadId}">Copy code</button><button class="file-btn primary" data-action="download-code" data-payload-id="${singlePayloadId}">Download file</button></div>
+      <div class="generated-file-icon">${f.explicit ? 'DOC' : 'CODE'}</div>
+      <div class="generated-file-info"><div class="generated-file-name">${escapeHtml(f.filename)}</div><div class="generated-file-meta"><span class="artifact-kind">${escapeHtml(kind)}</span> ${escapeHtml(f.lang)} - ${formatBytes(new Blob([f.code]).size)}${f.explicit ? '' : ' - inferred filename'}</div></div>
+      <div class="generated-file-actions"><button class="file-btn" data-action="copy-code" data-payload-id="${singlePayloadId}">Copy</button><button class="file-btn primary" data-action="download-code" data-payload-id="${singlePayloadId}">Download</button></div>
     </div>`;
   }).join('');
+  const previewButton = canPreview ? `<button class="file-btn primary" data-action="preview-artifacts" data-payload-id="${allPayloadId}">Preview app</button>` : '';
   const multi = files.length > 1
-    ? `<button class="file-btn" data-action="copy-all-files" data-payload-id="${allPayloadId}">Copy all</button><button class="file-btn primary" data-action="download-zip" data-payload-id="${allPayloadId}">Download all as ZIP</button>`
-    : `<button class="file-btn primary" data-action="download-all-files" data-payload-id="${allPayloadId}">Download file</button>`;
+    ? `${previewButton}<button class="file-btn" data-action="open-artifacts" data-payload-id="${allPayloadId}">Open drawer</button><button class="file-btn" data-action="copy-all-files" data-payload-id="${allPayloadId}">Copy all</button><button class="file-btn primary" data-action="download-zip" data-payload-id="${allPayloadId}">Download ZIP</button>`
+    : `${previewButton}<button class="file-btn" data-action="open-artifacts" data-payload-id="${allPayloadId}">Open drawer</button><button class="file-btn primary" data-action="download-all-files" data-payload-id="${allPayloadId}">Download</button>`;
   return `<div class="generated-files-panel"><div class="generated-files-header"><div><strong>${label}</strong><span>${sublabel}</span></div><div class="generated-files-buttons">${multi}</div></div>${cards}</div>`;
 }
 
+function fileKind(file = {}) {
+  const name = String(file.filename || '').toLowerCase();
+  const lang = String(file.lang || '').toLowerCase();
+  if (/\.(html?|css|jsx?|tsx?)$/.test(name) || ['html', 'css', 'javascript', 'typescript', 'js', 'ts'].includes(lang)) return 'Web';
+  if (/\.(md|markdown|txt|doc)$/.test(name) || ['markdown', 'text'].includes(lang)) return 'Doc';
+  if (/\.(json|csv|tsv|ya?ml|toml|xml)$/.test(name) || ['json', 'csv', 'yaml', 'xml'].includes(lang)) return 'Data';
+  if (/\.(py|ps1|sh|bat|cmd|sql|go|rs|java|cs|php|rb)$/.test(name)) return 'Code';
+  return 'File';
+}
+
+function canPreviewFiles(files = []) {
+  return Array.isArray(files) && files.some(f => /\.html?$/i.test(f.filename || '') || /html/i.test(f.lang || ''));
+}
+
+function buildArtifactPreviewHtml(files = []) {
+  const byName = new Map(files.map(f => [String(f.filename || '').toLowerCase().split('/').pop(), f]));
+  const htmlFile = files.find(f => /^index\.html?$/i.test(String(f.filename || '').split('/').pop())) || files.find(f => /\.html?$/i.test(f.filename || '') || /html/i.test(f.lang || ''));
+  if (!htmlFile) return '';
+  let html = String(htmlFile.code || '');
+  const cssFiles = files.filter(f => /\.css$/i.test(f.filename || '') && !html.includes(String(f.filename || '').split('/').pop()));
+  const jsFiles = files.filter(f => /\.(m?js|jsx)$/i.test(f.filename || '') && !html.includes(String(f.filename || '').split('/').pop()));
+  const injectedCss = cssFiles.map(f => `<style data-artifact="${escapeAttr(f.filename)}">\n${f.code}\n</style>`).join('\n');
+  const injectedJs = jsFiles.map(f => `<script data-artifact="${escapeAttr(f.filename)}">\n${String(f.code || '').replace(/<\/script/gi, '<\\/script')}\n<\/script>`).join('\n');
+  html = html.replace(/<link\b[^>]+href=["']([^"']+)["'][^>]*>/gi, (tag, href) => {
+    const file = byName.get(String(href || '').split('/').pop().toLowerCase());
+    return file && /\.css$/i.test(file.filename || '') ? `<style data-artifact="${escapeAttr(file.filename)}">\n${file.code}\n</style>` : tag;
+  });
+  html = html.replace(/<script\b[^>]+src=["']([^"']+)["'][^>]*><\/script>/gi, (tag, src) => {
+    const file = byName.get(String(src || '').split('/').pop().toLowerCase());
+    return file && /\.(m?js|jsx)$/i.test(file.filename || '') ? `<script data-artifact="${escapeAttr(file.filename)}">\n${String(file.code || '').replace(/<\/script/gi, '<\\/script')}\n<\/script>` : tag;
+  });
+  if (injectedCss) html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, `${injectedCss}\n</head>`) : `${injectedCss}\n${html}`;
+  if (injectedJs) html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${injectedJs}\n</body>`) : `${html}\n${injectedJs}`;
+  return html;
+}
 function renderMarkdown(text) {
   let src = String(text || '');
   const codeBlocks = [];
@@ -1105,12 +1143,60 @@ function downloadFilesAsZip(input) {
   try {
     const blob = buildZipBlob(files.map(f => ({ name: f.filename || 'file.txt', content: String(f.code || '') })));
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    downloadBlob(`nvidia-ai-files-${stamp}.zip`, blob);
+    const html = files.find(f => /^index\.html?$/i.test(String(f.filename || '').split('/').pop()));
+    const base = html ? 'nvidia-ai-web-artifact' : 'nvidia-ai-files';
+    downloadBlob(`${base}-${stamp}.zip`, blob);
     showToast(`Downloaded ${files.length} file${files.length === 1 ? '' : 's'} as ZIP`);
   } catch (err) {
     showToast('ZIP failed, downloading files individually instead.', 'error');
     downloadAllEncodedFiles(files);
   }
+}
+
+function artifactFileRows(files = []) {
+  return files.map(file => {
+    const payloadId = storeGeneratedPayload({ filename: file.filename, code: file.code, lang: file.lang });
+    return `<div class="artifact-row">
+      <div class="artifact-row-main">
+        <strong>${escapeHtml(file.filename || 'file.txt')}</strong>
+        <span>${escapeHtml(fileKind(file))} - ${escapeHtml(file.lang || 'text')} - ${formatBytes(new Blob([file.code || '']).size)}</span>
+      </div>
+      <div class="artifact-row-actions">
+        <button class="file-btn" data-action="copy-code" data-payload-id="${payloadId}">Copy</button>
+        <button class="file-btn primary" data-action="download-code" data-payload-id="${payloadId}">Download</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openArtifactsDrawer(input) {
+  const files = decodePayloadInput(input);
+  if (!Array.isArray(files) || !files.length) return;
+  const payloadId = storeGeneratedPayload(files);
+  const previewButton = state.settings.plugins.artifactPreview && canPreviewFiles(files)
+    ? `<button class="btn btn-primary" data-action="preview-artifacts" data-payload-id="${payloadId}">Preview app</button>`
+    : '';
+  openPanel('Artifacts', `
+    <div class="panel-section-label">Generated files</div>
+    <div class="artifact-list">${artifactFileRows(files)}</div>
+    <div class="btn-row" style="margin-top:12px;">${previewButton}<button class="btn btn-secondary" data-action="copy-all-files" data-payload-id="${payloadId}">Copy all</button><button class="btn btn-primary" data-action="download-zip" data-payload-id="${payloadId}">Download ZIP</button></div>
+  `);
+}
+
+function previewArtifacts(input) {
+  const files = decodePayloadInput(input);
+  if (!Array.isArray(files) || !files.length) return;
+  const html = buildArtifactPreviewHtml(files);
+  if (!html) {
+    showToast('No HTML file found to preview.', 'error');
+    openArtifactsDrawer(files);
+    return;
+  }
+  const payloadId = storeGeneratedPayload(files);
+  openPanel('Artifact Preview', `
+    <div class="btn-row artifact-preview-actions"><button class="btn btn-secondary" data-action="open-artifacts" data-payload-id="${payloadId}">Files</button><button class="btn btn-primary" data-action="download-zip" data-payload-id="${payloadId}">Download ZIP</button></div>
+    <iframe class="artifact-preview-frame" sandbox="allow-scripts allow-forms allow-modals" srcdoc="${escapeAttr(html)}"></iframe>
+  `);
 }
 
 // --- Minimal, dependency-free ZIP writer (store / no compression) ---
@@ -1383,6 +1469,7 @@ function buildConversationMessages(extraSystemContext = '') {
     agent.prompt,
     state.settings.plugins.thinkingDisplay ? 'If you expose public reasoning via the API, put it in the provider reasoning field. If not, do not reveal hidden chain-of-thought; include a concise reasoning summary only when useful.' : '',
     state.settings.plugins.downloadButtons ? 'IMPORTANT for downloadable files: When the user asks for files, fixes, patches, full updated files, uploadable files, or downloadable code, you MUST output each complete file in its own fenced code block. The FIRST line inside every code block MUST be exactly filename: path/file.ext. Do not only describe changes. Do not use partial diffs unless the user asks for a diff. Include the full changed file content. The app will turn those code blocks into Copy and Download buttons.' : '',
+    state.settings.plugins.preferFileOutputs ? 'File Output Mode is enabled. When producing code, websites, documents, structured data, or multi-step deliverables, prefer clean complete file blocks with filename lines, then a short note. For web apps include index.html plus any styles.css/app.js files needed for preview.' : '',
     extraSystemContext
   ].filter(Boolean);
   const messages = [];
@@ -1971,6 +2058,34 @@ function selectModel(id) {
   updateStatus(); updateSendButton();
   document.getElementById('modelDropdown')?.classList.remove('open');
 }
+function recommendModel(type) {
+  if (!state.liveModels.length) { showToast('Load models first.', 'error'); return; }
+  const profiles = {
+    coding: { positives: ['coding', 'code', 'qwen', 'coder', 'deepseek', 'nemotron'], negatives: ['embedding', 'rerank', 'image', 'speech'] },
+    reasoning: { positives: ['reasoning', 'reason', 'deepseek', 'nemotron', 'qwen', 'glm'], negatives: ['embedding', 'rerank', 'image', 'speech'] },
+    free: { positives: ['free_endpoint', 'free', 'api'], negatives: ['catalog_only', 'embedding', 'rerank'] },
+    fast: { positives: ['fast', 'small', 'mini', '8b', '7b', 'free_endpoint', 'api'], negatives: ['70b', '405b', 'large', 'embedding', 'rerank'] }
+  };
+  const profile = profiles[type] || profiles.coding;
+  const candidates = state.liveModels
+    .filter(m => !m.catalogOnly)
+    .map(m => ({ model: m, score: scoreModel(m, profile.positives, profile.negatives) }))
+    .sort((a, b) => b.score - a.score || modelSortName(a.model).localeCompare(modelSortName(b.model)));
+  const picked = candidates[0]?.model;
+  if (!picked) { showToast('No API-ready model found.', 'error'); return; }
+  selectModel(picked.id);
+  showToast(`Selected ${picked.name}`);
+}
+function scoreModel(model, positives = [], negatives = []) {
+  const haystack = `${model.id} ${model.name} ${model.desc} ${(model.capabilities || []).join(' ')}`.toLowerCase();
+  let score = 0;
+  for (const term of positives) if (haystack.includes(term)) score += term.length > 5 ? 4 : 2;
+  for (const term of negatives) if (haystack.includes(term)) score -= 8;
+  if (model.capabilities?.includes('api')) score += 3;
+  if (model.capabilities?.includes('free_endpoint')) score += 4;
+  if (state.favourites.has(model.id)) score += 2;
+  return score;
+}
 function toggleFavourite(id, event) {
   event?.stopPropagation();
   if (state.favourites.has(id)) state.favourites.delete(id); else state.favourites.add(id);
@@ -2234,6 +2349,8 @@ function openPluginsPanel() {
     </div>
     ${pluginToggleHtml('fileReader', '📁', 'File Reader', 'Reads attached text/code/CSV/Markdown files into the prompt.')}
     ${pluginToggleHtml('downloadButtons', '⬇️', 'Download Buttons', 'Shows Download buttons on generated code/file blocks.')}
+    ${pluginToggleHtml('preferFileOutputs', 'FILES', 'Prefer File Outputs', 'Prompts models to return complete downloadable files for code, apps, docs, and structured outputs.')}
+    ${pluginToggleHtml('artifactPreview', 'PREVIEW', 'Artifact Preview', 'Adds a preview drawer for generated HTML/CSS/JS artifacts.')}
     ${pluginToggleHtml('thinkingDisplay', '🧠', 'Thinking Display', 'Shows Thinking… and plugin progress while waiting/streaming.')}
     ${pluginToggleHtml('longContext', '📄', 'Long Context', 'Sends more chat history to the model. Uses more tokens.')}
     ${pluginToggleHtml('codeInterpreter', '💻', 'Code Interpreter', 'Disabled: needs a real backend sandbox, not just GitHub Pages.', true)}
@@ -2690,9 +2807,12 @@ const CLICK_ACTIONS = {
   'download-all-files': (el) => downloadAllEncodedFiles(readGeneratedPayloadFromElement(el)),
   'download-zip': (el) => downloadFilesAsZip(readGeneratedPayloadFromElement(el)),
   'copy-all-files': (el) => copyAllEncodedFiles(readGeneratedPayloadFromElement(el)),
+  'open-artifacts': (el) => openArtifactsDrawer(readGeneratedPayloadFromElement(el)),
+  'preview-artifacts': (el) => previewArtifacts(readGeneratedPayloadFromElement(el)),
   'remove-attachment': (el) => removePendingAttachment(el.dataset.attId),
   'toggle-fav': (el, ev) => toggleFavourite(el.dataset.modelId, ev),
   'select-model': (el) => selectModel(el.dataset.modelId),
+  'recommend-model': (el) => recommendModel(el.dataset.rec),
   'toggle-plugin': (el) => togglePlugin(el.dataset.key),
   'test-web-search': () => testWebSearchPlugin(),
   'select-agent': (el) => selectAgent(el.dataset.agent),
@@ -2769,6 +2889,7 @@ function registerServiceWorker() {
       sw.addEventListener('statechange', () => {
         if (sw.state === 'installed' && navigator.serviceWorker.controller) {
           state.diag.swStatus = 'update available';
+          document.getElementById('updateBanner')?.classList.add('open');
           showToast('A new version is ready. Use Clear cache & reload latest to update.');
         }
       });
@@ -2823,4 +2944,3 @@ Object.assign(window, {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
-

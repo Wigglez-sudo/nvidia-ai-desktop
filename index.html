@@ -19,6 +19,10 @@
 </head>
 <body>
   <div class="sidebar-backdrop" id="sidebarBackdrop" data-action="close-sidebar" aria-hidden="true"></div>
+  <div class="update-banner" id="updateBanner">
+    <span>New version available</span>
+    <button type="button" data-action="clear-cache">Update now</button>
+  </div>
 
   <div class="splash-overlay" id="startupSplash" aria-modal="true" role="dialog">
     <div class="splash-shell">
@@ -92,7 +96,7 @@
         <div class="user-name" id="statusName">Luke</div>
         <div class="user-plan" id="statusText">Disconnected</div>
       </div>
-      <span class="app-version-badge" id="appVersionLabel">v3.0.7</span>
+      <span class="app-version-badge" id="appVersionLabel">v3.0.8</span>
     </button>
   </aside>
 
@@ -171,6 +175,12 @@
                   <div class="model-toolbar">
                     <input type="text" placeholder="Search live NVIDIA models..." id="modelSearch" data-action="model-search" autocomplete="off" spellcheck="false">
                     <button class="model-refresh-btn" type="button" data-action="refresh-models">Refresh</button>
+                  </div>
+                  <div class="model-recommendations">
+                    <button type="button" data-action="recommend-model" data-rec="coding">Best coding</button>
+                    <button type="button" data-action="recommend-model" data-rec="reasoning">Best reasoning</button>
+                    <button type="button" data-action="recommend-model" data-rec="free">Best free</button>
+                    <button type="button" data-action="recommend-model" data-rec="fast">Fastest</button>
                   </div>
                   <div class="model-meta" id="modelMeta"></div>
                 </div>

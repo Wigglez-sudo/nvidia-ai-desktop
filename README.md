@@ -7,7 +7,7 @@ A Kimi/Qwen-Studio-style NVIDIA AI chat app that runs as a static site on **GitH
 - Live site: https://wigglez-sudo.github.io/nvidia-ai-desktop/
 - Worker: https://nvidia-ai-proxy.lukewai.workers.dev
 
-This is **v3.0.7**, an onboarding and force-update patch on top of the v3.0.6 settings persistence baseline. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was patched in place without a rewrite.
+This is **v3.0.8**, an artifact/download and model-picker polish patch on top of the v3.0.7 splash/force-update baseline. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was patched in place without a rewrite.
 
 ---
 
@@ -65,7 +65,7 @@ index.worker.js
 Commit and wait for Pages to deploy. Then open with a cache-buster:
 
 ```
-https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.0.7
+https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.0.8
 ```
 
 If you ever see a stale version again, just click **Clear cache & reload latest** in the Diagnostics panel (bottom-left of the sidebar).
@@ -74,7 +74,7 @@ If you ever see a stale version again, just click **Clear cache & reload latest*
 
 ## Deploy the Cloudflare Worker
 
-The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.0.7. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
+The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.0.8. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
 
 Copy it to your local Wrangler project and deploy:
 
@@ -118,16 +118,16 @@ Do **not** add `/v1/models`, `/v1/chat/completions`, etc. — the app appends pa
 
 ## Test checklist
 
-After uploading, open the site with `?v=3.0.7` and check:
+After uploading, open the site with `?v=3.0.8` and check:
 
 1. Startup splash appears with `Created by Wigglez + Claude + ChatGPT Codex`.
 2. Splash **Save, Load Models & Enter** saves the NVIDIA key and Worker URL, pulls models, and closes into the app.
 3. Top-right **Force update** clears service-worker/cache storage and reloads with a fresh cache-buster.
-4. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.7`.
+4. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.8`.
 5. Settings → **Test Connection** loads models.
 6. Model picker → **Refresh**; the **Free Endpoint** and **API Available** tabs have models.
 7. Send a message → a reply renders (this is the path that used to be broken).
-8. Ask for "the full files, each in its own fenced block with `filename:` as the first line" → **Generated files** cards appear with Copy/Download, and **Download all as ZIP** for multi-file replies.
+8. Ask for "the full files, each in its own fenced block with `filename:` as the first line" → **Artifacts** cards appear with Copy/Download, Open drawer, Preview app for HTML/CSS/JS replies, and a cleaner ZIP download.
 9. Attach multiple files and drag/drop files → attachment chips only (no pasted file text in the chat).
 10. Edit a sent message; Regenerate a reply.
 11. Rename, pin, search, and delete chats in the sidebar.
@@ -211,4 +211,16 @@ No Cloudflare Worker change is required for this patch unless you want to redepl
 - Added a visible top-bar **Force update** button that unregisters the service worker, clears caches, and reloads with a fresh cache-buster.
 - Splash includes a **Force Update** button for stale iOS/desktop cache recovery before entering the app.
 - Bumped the service-worker cache to `nvidia-ai-desktop-v3-0-7`.
+- No Cloudflare Worker change is required for this frontend-only patch.
+
+## v3.0.8 — Artifact and model-picker polish
+
+- Added an Artifact Preview plugin toggle that can preview generated HTML/CSS/JS app bundles inside the side drawer.
+- Added an artifact drawer with cleaner file rows, file-kind badges, compact Copy/Download actions, Copy all, and ZIP download.
+- Renamed generated multi-file responses to **Artifacts** when explicit filenames are detected.
+- Improved ZIP naming for generated web artifacts.
+- Added **Prefer File Outputs** prompt mode so models are nudged toward complete downloadable files for apps, docs, code, and structured outputs.
+- Added model recommendation chips for coding, reasoning, free, and fast model selection.
+- Added a service-worker update banner that appears when a new frontend build is waiting.
+- Bumped the service-worker cache to `nvidia-ai-desktop-v3-0-8`.
 - No Cloudflare Worker change is required for this frontend-only patch.
