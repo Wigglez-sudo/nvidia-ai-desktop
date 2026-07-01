@@ -7,7 +7,7 @@ A Kimi/Qwen-Studio-style NVIDIA AI chat app that runs as a static site on **GitH
 - Live site: https://wigglez-sudo.github.io/nvidia-ai-desktop/
 - Worker: https://nvidia-ai-proxy.lukewai.workers.dev
 
-This is **v3.0.5**, a small iOS layout patch on top of the v3.0.4 stability baseline. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was patched in place without a rewrite.
+This is **v3.0.6**, a small settings persistence patch on top of the v3.0.5 iOS layout baseline. The proven engine (streaming, model catalog, generated-file parsing, the Worker) was kept; the app was patched in place without a rewrite.
 
 ---
 
@@ -65,7 +65,7 @@ index.worker.js
 Commit and wait for Pages to deploy. Then open with a cache-buster:
 
 ```
-https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.0.5
+https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.0.6
 ```
 
 If you ever see a stale version again, just click **Clear cache & reload latest** in the Diagnostics panel (bottom-left of the sidebar).
@@ -74,7 +74,7 @@ If you ever see a stale version again, just click **Clear cache & reload latest*
 
 ## Deploy the Cloudflare Worker
 
-The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.0.5. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
+The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.0.6. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
 
 Copy it to your local Wrangler project and deploy:
 
@@ -118,9 +118,9 @@ Do **not** add `/v1/models`, `/v1/chat/completions`, etc. — the app appends pa
 
 ## Test checklist
 
-After uploading, open the site with `?v=3.0.5` and check:
+After uploading, open the site with `?v=3.0.6` and check:
 
-1. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.5`.
+1. Sidebar name/status (bottom-left) opens the **Diagnostics** panel; version badge shows `v3.0.6`.
 2. Settings → **Test Connection** loads models.
 3. Model picker → **Refresh**; the **Free Endpoint** and **API Available** tabs have models.
 4. Send a message → a reply renders (this is the path that used to be broken).
@@ -133,6 +133,7 @@ After uploading, open the site with `?v=3.0.5` and check:
 11. On iPhone/Safari: the top toolbar sits below the status/dynamic-island area, the sidebar opens as a drawer with a backdrop, and the model picker sits above the keyboard.
 12. Enable **Stream Diagnostics** and send to a reasoning model (e.g. a Nemotron/DeepSeek/Qwen/GLM); the diagnostics block shows chunk/SSE/JSON/content/reasoning counters.
 13. Click **Regenerate** on an assistant reply, then click **Stop** while it is responding; the active regenerated request stops and keeps any partial text.
+14. Save Settings with an NVIDIA API key and Worker URL, refresh the page, then reopen Settings; both fields should still be populated.
 
 ---
 
@@ -190,4 +191,12 @@ No Cloudflare Worker change is required for this patch unless you want to redepl
 - Fixed the iPhone/PWA layout where the top toolbar could sit underneath the status bar or dynamic island, making the hamburger/title/settings area hard to press.
 - Added mobile safe-area top padding to the top bar and sidebar drawer.
 - Bumped the service-worker cache to `nvidia-ai-desktop-v3-0-5`.
+- No Cloudflare Worker change is required for this frontend-only patch.
+
+## v3.0.6 — Settings persistence on iOS
+
+- Added a verified browser-local backup for connection settings so the NVIDIA API key, Worker URL, and optional search key survive refreshes more reliably on iOS/Safari.
+- Restores the connection settings from the backup if the main settings blob is missing or incomplete.
+- Clear all local data now removes the connection backup too.
+- Bumped the service-worker cache to `nvidia-ai-desktop-v3-0-6`.
 - No Cloudflare Worker change is required for this frontend-only patch.

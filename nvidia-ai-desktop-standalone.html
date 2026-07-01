@@ -1139,7 +1139,7 @@ body.dragging-files::after {
         <div class="user-name" id="statusName">Luke</div>
         <div class="user-plan" id="statusText">Disconnected</div>
       </div>
-      <span class="app-version-badge" id="appVersionLabel">v3.0.5</span>
+      <span class="app-version-badge" id="appVersionLabel">v3.0.6</span>
     </button>
   </aside>
 
@@ -1342,10 +1342,12 @@ body.dragging-files::after {
   <div class="toast-container" id="toastContainer"></div>
   <script>
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.5';
-const BUILD_ID = '2026-07-ios-safe-area-topbar';
+const APP_VERSION = '3.0.6';
+const BUILD_ID = '2026-07-ios-settings-persistence';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
+const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
+const SETTINGS_SECRET_BACKUP_KEY = 'nvidia_ai_desktop_connection_backup_v1';
 const MODEL_CACHE_KEY = 'nvidia_ai_desktop_live_models_v8_plugins';
 const FAV_KEY = 'nvidia_ai_desktop_favourites_v8_plugins';
 const CHATS_KEY = 'nvidia_ai_desktop_chats_v8_plugins';
@@ -1499,7 +1501,7 @@ const DEFAULT_PLUGINS = {
 const state = {
   settings: {
     apiKey: '',
-    proxyUrl: 'https://nvidia-ai-proxy.lukewai.workers.dev',
+    proxyUrl: DEFAULT_PROXY_URL,
     userName: 'Luke',
     temperature: 0.7,
     maxTokens: 2048,
@@ -1704,7 +1706,57 @@ function appendAssistantVisibleOrReasoning(msg, text) {
 function loadJson(key, fallback) {
   try { const value = JSON.parse(localStorage.getItem(key) || 'null'); return value ?? fallback; } catch { return fallback; }
 }
-function saveJson(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} }
+function saveJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+function setCookieJson(name, value, days = 365) {
+  try {
+    const expires = new Date(Date.now() + days * 86400000).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(JSON.stringify(value))}; expires=${expires}; path=/; SameSite=Strict; Secure`;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+function getCookieJson(name, fallback = null) {
+  try {
+    const prefix = `${name}=`;
+    const item = document.cookie.split(';').map(x => x.trim()).find(x => x.startsWith(prefix));
+    if (!item) return fallback;
+    return JSON.parse(decodeURIComponent(item.slice(prefix.length)));
+  } catch (_) {
+    return fallback;
+  }
+}
+function deleteCookie(name) {
+  try { document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Strict; Secure`; } catch (_) {}
+}
+function persistConnectionBackup() {
+  const backup = {
+    apiKey: state.settings.apiKey || '',
+    proxyUrl: stripSlash(state.settings.proxyUrl || DEFAULT_PROXY_URL),
+    webSearchApiKey: state.settings.plugins?.webSearchApiKey || '',
+    webSearchProvider: state.settings.plugins?.webSearchProvider || 'brave',
+    savedAt: Date.now()
+  };
+  saveJson(SETTINGS_SECRET_BACKUP_KEY, backup);
+  setCookieJson(SETTINGS_SECRET_BACKUP_KEY, backup);
+}
+function restoreConnectionBackup() {
+  const backup = loadJson(SETTINGS_SECRET_BACKUP_KEY, null) || getCookieJson(SETTINGS_SECRET_BACKUP_KEY, null);
+  if (!backup || typeof backup !== 'object') return;
+  if (!state.settings.apiKey && backup.apiKey) state.settings.apiKey = String(backup.apiKey);
+  if ((!state.settings.proxyUrl || state.settings.proxyUrl === DEFAULT_PROXY_URL) && backup.proxyUrl) state.settings.proxyUrl = stripSlash(backup.proxyUrl);
+  if (state.settings.plugins) {
+    if (!state.settings.plugins.webSearchApiKey && backup.webSearchApiKey) state.settings.plugins.webSearchApiKey = String(backup.webSearchApiKey);
+    if (backup.webSearchProvider) state.settings.plugins.webSearchProvider = String(backup.webSearchProvider);
+  }
+}
 
 function migrateLegacyStorage() {
   // If current keys are empty but an older build's keys exist, carry them forward once.
@@ -1732,6 +1784,8 @@ function loadState() {
   migrateLegacyStorage();
   state.settings = { ...state.settings, ...loadJson(SETTINGS_KEY, {}) };
   state.settings.plugins = { ...DEFAULT_PLUGINS, ...(state.settings.plugins || {}) };
+  if (!state.settings.proxyUrl) state.settings.proxyUrl = DEFAULT_PROXY_URL;
+  restoreConnectionBackup();
   state.settings.showThinking = !!state.settings.plugins.thinkingDisplay;
   const cache = loadJson(MODEL_CACHE_KEY, { models: [], updatedAt: 0 });
   state.liveModels = Array.isArray(cache.models) ? cache.models.map(normalizeModel).filter(Boolean) : [];
@@ -1742,7 +1796,7 @@ function loadState() {
   applyTheme();
 }
 
-function persistSettings() { saveJson(SETTINGS_KEY, state.settings); }
+function persistSettings() { saveJson(SETTINGS_KEY, state.settings); persistConnectionBackup(); }
 function persistChats() { saveJson(CHATS_KEY, state.chats); if (state.currentChat) localStorage.setItem(CURRENT_CHAT_KEY, state.currentChat.id); }
 function persistModels() { saveJson(MODEL_CACHE_KEY, { models: state.liveModels.map(m => m.raw || m), updatedAt: Date.now() }); }
 function persistFavourites() { saveJson(FAV_KEY, [...state.favourites]); }
@@ -3641,8 +3695,9 @@ function exportDebugLogs() {
 function clearAllLocalData() {
   if (!confirm('Clear ALL local data (chats, settings, API key, favourites, cached models)? This cannot be undone.')) return;
   try {
-    [SETTINGS_KEY, MODEL_CACHE_KEY, FAV_KEY, CHATS_KEY, CURRENT_CHAT_KEY].forEach(k => localStorage.removeItem(k));
+    [SETTINGS_KEY, SETTINGS_SECRET_BACKUP_KEY, MODEL_CACHE_KEY, FAV_KEY, CHATS_KEY, CURRENT_CHAT_KEY].forEach(k => localStorage.removeItem(k));
     for (const k of listLegacyKeys()) localStorage.removeItem(k);
+    deleteCookie(SETTINGS_SECRET_BACKUP_KEY);
   } catch (_) {}
   showToast('Local data cleared. Reloading…');
   setTimeout(() => location.reload(), 600);
