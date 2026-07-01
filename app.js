@@ -6,6 +6,100 @@ const FAV_KEY = 'nvidia_ai_desktop_favourites_v8_plugins';
 const CHATS_KEY = 'nvidia_ai_desktop_chats_v8_plugins';
 const CURRENT_CHAT_KEY = 'nvidia_ai_desktop_current_chat_v8_plugins';
 
+
+// Verified Free Endpoint fallback list.
+// NVIDIA's /v1/models endpoint does not always include the Free Endpoint flag.
+// This list is used as a local fallback based on NVIDIA Build Free Endpoint screenshots/catalog.
+const VERIFIED_FREE_ENDPOINT_SLUGS = new Set([
+  "minimax-m3",
+  "diffusiongemma-26b-a4b-it",
+  "nemotron-3-ultra-550b-a55b",
+  "nemotron-3.5-content-safety",
+  "cosmos3-nano",
+  "cosmos3-nano-reasoner",
+  "step-3.7-flash",
+  "kimi-k2.6",
+  "mistral-medium-3.5-128b",
+  "nemotron-3-nano-omni-30b-a3b-reasoning",
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "glm-5.1",
+  "nemotron-3-content-safety",
+  "synthetic-video-detector",
+  "active-speaker-detection",
+  "ising-calibration-1-35b-a3b",
+  "minimax-m2.7",
+  "gemma-3-31b-it",
+  "nemotron-voicechat",
+  "qwen3.5-122b-a10b",
+  "cosmos-transfer-2.5b",
+  "step-3.5-flash",
+  "nemotron-3-nano-30b-a3b",
+  "mistral-small-4-1-9b-2509",
+  "nemotron-3-super-128b-a12b",
+  "qwen3.5-397b-a17b",
+  "nemotron-content-safety-reasoning-9b",
+  "nvidia-nemotron-translate-instruct-v1",
+  "riva-translate-instruct-v1",
+  "mistral-large-3.675b-instruct-2512",
+  "gliner-v1",
+  "mistral-14b-instruct-2512",
+  "streamer",
+  "nemotron-nano-12b-v2",
+  "llama-3.1-nemotron-safety-guard-8b-v3",
+  "qwen3-next-80b-a3b-thinking",
+  "lightcone-preview-instruct",
+  "mistral-nemotron-nano-9b-v2",
+  "gpt-oss-20b",
+  "gpt-oss-120b",
+  "llama-3.1-nemotron-super-49b-v1.5",
+  "sarvam-m",
+  "llama-guard-4-12b",
+  "gemma-3n-e4b-it",
+  "gemma-3n-e2b-it",
+  "cosmos-transfer1-7b",
+  "background-noise-removal",
+  "mistral-nemotron",
+  "llama-3.1-nemotron-nano-vl-8b-v1",
+  "magpie-tts-zero-shot",
+  "llama-4-maverick-17b-128e-instruct",
+  "llama-3.3-nemotron-super-49b-v1",
+  "llama-3.1-nemotron-nano-8b-v1",
+  "nv-embedcode-7b-v1",
+  "phi-4-mini-instruct",
+  "phi-4-multimodal-instruct",
+  "whisper-large-v3",
+  "gemma-7b",
+  "llama-3.2-70b-instruct",
+  "studio-voice",
+  "llama-3.2-3b-instruct",
+  "llama-3.2-11b-vision-instruct",
+  "llama-3.2-90b-vision-instruct",
+  "llama-3.2-1b-instruct",
+  "dracarys-llama-3.1-70b-instruct",
+  "nemotron-mini-4b-instruct",
+  "gemma-2-9b-it",
+  "llama-3.1-70b-instruct",
+  "llama-3.1-8b-instruct",
+  "nv-embed-v1",
+  "bloom",
+  "paligemma",
+  "rerank-qa-mistral-4b",
+  "seamlessm4t",
+  "mistral-7b-instruct-v0.1"
+]);
+
+function isVerifiedFreeEndpoint(value, raw = {}) {
+  const values = [value, raw.id, raw.modelId, raw.model, raw.slug, raw.catalogSlug, raw.name, raw.title, raw.display_name, raw.displayName];
+  for (const v of values) {
+    if (!v) continue;
+    for (const key of modelMatchKeys(v)) {
+      if (VERIFIED_FREE_ENDPOINT_SLUGS.has(key)) return true;
+    }
+  }
+  return false;
+}
+
 const MODES = [
   { key: 'chat', icon: '💬', label: 'Chat', short: 'General assistant for normal questions and tasks.', prompt: 'You are a helpful NVIDIA AI desktop assistant. Be clear, practical and honest. When code or files are useful, use fenced code blocks with a filename line such as filename: app.js.' },
   { key: 'coding', icon: '💻', label: 'Coding', short: 'Programming, debugging, Docker, Git, APIs and file generation.', prompt: 'You are an expert software engineer. Prioritise working code, exact commands, debugging steps, and downloadable file blocks. Ask only when required. When generating files, use fenced code blocks and put filename: path/to/file.ext as the first line.' },
@@ -201,10 +295,10 @@ function inferCapabilities(id, raw = {}) {
   if (/128k|200k|256k|1m|million|long|kimi|context/.test(text)) caps.add('long');
   if (/nano|mini|small|fast|flash|7b|8b|9b|12b|phi|gemma-2b/.test(text)) caps.add('fast');
 
-  const explicitlyFreeEndpoint = modelHasTruthy(raw, [
+  const explicitlyFreeEndpoint = isVerifiedFreeEndpoint(id, raw) || modelHasTruthy(raw, [
     'free_endpoint', 'freeEndpoint', 'is_free_endpoint', 'isFreeEndpoint',
     'has_free_endpoint', 'hasFreeEndpoint', 'free', 'is_free', 'isFree'
-  ]) || /free[\s_-]*endpoint|free_endpoint|free-endpoint|free endpoint available|endpoint[^a-z0-9]+free|\bfree\b/.test(text);
+  ]) || /free[\s_-]*endpoint|free_endpoint|free-endpoint|free endpoint available|endpoint[^a-z0-9]+free/.test(text);
 
   if (explicitlyFreeEndpoint) {
     caps.add('free_endpoint');
@@ -1150,7 +1244,7 @@ function renderModelList() {
     return;
   }
   if (!models.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">No models here</div><div class="empty-state-desc">Try another tab or star some favourites.</div></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⭐</div><div class="empty-state-title">No models here</div><div class="empty-state-desc">Try Refresh Models. If this is the Free Endpoint tab, the app now uses verified fallback tags as well as NVIDIA metadata.</div></div>`;
     setModelMeta(`${state.liveModels.length} live models loaded • ${state.favourites.size} favourites`);
     return;
   }

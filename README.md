@@ -110,3 +110,16 @@ In the app:
 5. Check Free Endpoint tab
 
 Some models may show **Catalog Only**. Those came from the Build catalog but were not matched to your `/v1/models` response. They are shown so you can see the full catalog, but if one fails in chat, NVIDIA may require a different endpoint or exact model ID.
+
+
+## Free Endpoint verified fallback update
+
+This build adds a verified Free Endpoint fallback list (76 slugs) so the model picker can show Free Endpoint badges even when NVIDIA's `/v1/models` response does not include the `Free Endpoint` flag.
+
+After uploading:
+1. Hard refresh with `?v=freeverified1`.
+2. Open Settings and confirm your Worker URL is saved.
+3. Click Refresh Models.
+4. Open the model picker and use the Free Endpoint tab.
+
+For the strongest catalogue metadata, also update the Cloudflare Worker using `index.worker.js` / `cloudflare-worker.js` from this package.

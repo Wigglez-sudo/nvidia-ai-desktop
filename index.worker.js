@@ -13,6 +13,89 @@
 
 const NVIDIA_BASE = "https://integrate.api.nvidia.com";
 
+// Verified Free Endpoint fallback slugs. Used because the public Build page/API can omit this flag in parsed metadata.
+const VERIFIED_FREE_ENDPOINT_SLUGS = new Set([
+  "minimax-m3",
+  "diffusiongemma-26b-a4b-it",
+  "nemotron-3-ultra-550b-a55b",
+  "nemotron-3.5-content-safety",
+  "cosmos3-nano",
+  "cosmos3-nano-reasoner",
+  "step-3.7-flash",
+  "kimi-k2.6",
+  "mistral-medium-3.5-128b",
+  "nemotron-3-nano-omni-30b-a3b-reasoning",
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "glm-5.1",
+  "nemotron-3-content-safety",
+  "synthetic-video-detector",
+  "active-speaker-detection",
+  "ising-calibration-1-35b-a3b",
+  "minimax-m2.7",
+  "gemma-3-31b-it",
+  "nemotron-voicechat",
+  "qwen3.5-122b-a10b",
+  "cosmos-transfer-2.5b",
+  "step-3.5-flash",
+  "nemotron-3-nano-30b-a3b",
+  "mistral-small-4-1-9b-2509",
+  "nemotron-3-super-128b-a12b",
+  "qwen3.5-397b-a17b",
+  "nemotron-content-safety-reasoning-9b",
+  "nvidia-nemotron-translate-instruct-v1",
+  "riva-translate-instruct-v1",
+  "mistral-large-3.675b-instruct-2512",
+  "gliner-v1",
+  "mistral-14b-instruct-2512",
+  "streamer",
+  "nemotron-nano-12b-v2",
+  "llama-3.1-nemotron-safety-guard-8b-v3",
+  "qwen3-next-80b-a3b-thinking",
+  "lightcone-preview-instruct",
+  "mistral-nemotron-nano-9b-v2",
+  "gpt-oss-20b",
+  "gpt-oss-120b",
+  "llama-3.1-nemotron-super-49b-v1.5",
+  "sarvam-m",
+  "llama-guard-4-12b",
+  "gemma-3n-e4b-it",
+  "gemma-3n-e2b-it",
+  "cosmos-transfer1-7b",
+  "background-noise-removal",
+  "mistral-nemotron",
+  "llama-3.1-nemotron-nano-vl-8b-v1",
+  "magpie-tts-zero-shot",
+  "llama-4-maverick-17b-128e-instruct",
+  "llama-3.3-nemotron-super-49b-v1",
+  "llama-3.1-nemotron-nano-8b-v1",
+  "nv-embedcode-7b-v1",
+  "phi-4-mini-instruct",
+  "phi-4-multimodal-instruct",
+  "whisper-large-v3",
+  "gemma-7b",
+  "llama-3.2-70b-instruct",
+  "studio-voice",
+  "llama-3.2-3b-instruct",
+  "llama-3.2-11b-vision-instruct",
+  "llama-3.2-90b-vision-instruct",
+  "llama-3.2-1b-instruct",
+  "dracarys-llama-3.1-70b-instruct",
+  "nemotron-mini-4b-instruct",
+  "gemma-2-9b-it",
+  "llama-3.1-70b-instruct",
+  "llama-3.1-8b-instruct",
+  "nv-embed-v1",
+  "bloom",
+  "paligemma",
+  "rerank-qa-mistral-4b",
+  "seamlessm4t",
+  "mistral-7b-instruct-v0.1"
+]);
+function normaliseSlug(value = "") { return String(value || "").toLowerCase().split("/").pop().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
+function isVerifiedFreeEndpointSlug(value = "") { return VERIFIED_FREE_ENDPOINT_SLUGS.has(normaliseSlug(value)); }
+
+
 function corsHeaders(origin = "*") {
   return {
     "Access-Control-Allow-Origin": origin || "*",
@@ -210,8 +293,11 @@ function parseBuildModelsHtml(html = "", page = 1) {
     const publisher = findPublisher(before) || "";
     const description = afterLines.find(isProbablyDescription) || "";
     const capabilityText = [name, slug, publisher, description, statusWindow, afterLines.slice(0, 10).join(" ")].join(" ");
+    const verifiedFreeEndpoint = isVerifiedFreeEndpointSlug(slug) || isVerifiedFreeEndpointSlug(name);
     const prefix = publisherPrefix(publisher);
     const modelId = prefix && prefix !== "catalog" ? `${prefix}/${slug}` : slug;
+    const caps = inferUseCaseCaps(capabilityText);
+    if (verifiedFreeEndpoint) { caps.push("free_endpoint", "free"); }
 
     models.push({
       id: modelId,
@@ -222,10 +308,10 @@ function parseBuildModelsHtml(html = "", page = 1) {
       title: name,
       publisher,
       description,
-      freeEndpoint: /free endpoint/i.test(statusWindow),
+      freeEndpoint: verifiedFreeEndpoint || /free endpoint/i.test(statusWindow),
       downloadable: /downloadable/i.test(statusWindow),
       partnerEndpoint: /partner endpoint/i.test(statusWindow),
-      capabilities: inferUseCaseCaps(capabilityText),
+      capabilities: [...new Set(caps)],
       source: "catalog",
       catalogOnly: true,
       page,
