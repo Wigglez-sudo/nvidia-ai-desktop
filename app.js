@@ -1,8 +1,10 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.12';
-const BUILD_ID = '2026-07-settings-only-update';
+const APP_VERSION = '3.0.13';
+const BUILD_ID = '2026-07-slow-model-fallback';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
+const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
+const NON_STREAM_RETRY_TIMEOUT_MS = 90000;
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
 const SETTINGS_SECRET_BACKUP_KEY = 'nvidia_ai_desktop_connection_backup_v1';
 const SPLASH_SEEN_KEY = 'nvidia_ai_desktop_splash_seen_v1';
@@ -1608,7 +1610,7 @@ async function requestAssistantResponse(assistantId) {
     try {
       const response = await fetchWithTimeout(buildApiUrl('/chat/completions'), {
         method: 'POST', headers: apiHeaders(bodyPayload.stream), body: JSON.stringify(bodyPayload), signal: currentRequestSignal()
-      }, 120000);
+      }, bodyPayload.stream ? STREAM_FIRST_TOKEN_TIMEOUT_MS : NON_STREAM_RETRY_TIMEOUT_MS);
       clearInterval(ticker);
       const msg = getMessage(assistantId);
       if (msg) {
@@ -1628,9 +1630,9 @@ async function requestAssistantResponse(assistantId) {
       if (!response.ok) throw new Error(await errorFromResponse(response));
       const contentType = response.headers.get('content-type') || '';
       if (bodyPayload.stream && response.body && /text\/event-stream|application\/x-ndjson|text\/plain/i.test(contentType + response.headers.get('transfer-encoding'))) {
-        await readStream(response, assistantId);
+        await readStream(response, assistantId, false, bodyPayload.stream ? STREAM_FIRST_TOKEN_TIMEOUT_MS : 0);
       } else if (bodyPayload.stream && response.body) {
-        const streamed = await readStream(response, assistantId, true);
+        const streamed = await readStream(response, assistantId, true, STREAM_FIRST_TOKEN_TIMEOUT_MS);
         if (!streamed) await readJsonResponse(response, assistantId);
       } else {
         await readJsonResponse(response, assistantId);
@@ -1645,7 +1647,16 @@ async function requestAssistantResponse(assistantId) {
     await sendPayload(payload);
   } catch (err) {
     const text = err?.message || String(err);
-    if ((payload.chat_template_kwargs || payload.include_reasoning || payload.thinking_token_budget) && /HTTP (400|422|500)|invalid|unsupported|chat_template|thinking|reasoning/i.test(text)) {
+    if (payload.stream && /Request timed out|first token timeout|timed out waiting/i.test(text)) {
+      const msg = getMessage(assistantId);
+      if (msg) {
+        msg.content = '';
+        msg.thinking += `The selected model did not start streaming within ${Math.round(STREAM_FIRST_TOKEN_TIMEOUT_MS / 1000)} seconds. Retrying once without streaming; this often helps when NVIDIA has a cold or congested endpoint.\n`;
+        recordStreamEvent(msg, 'Retrying without streaming', text);
+        updateAssistantDom(msg);
+      }
+      await sendPayload({ ...payload, stream: false }, ' (retry without streaming)');
+    } else if ((payload.chat_template_kwargs || payload.include_reasoning || payload.thinking_token_budget) && /HTTP (400|422|500)|invalid|unsupported|chat_template|thinking|reasoning/i.test(text)) {
       const msg = getMessage(assistantId);
       if (msg) {
         msg.content = '';
@@ -1680,12 +1691,13 @@ async function readJsonResponse(response, assistantId) {
   updateAssistantDom(msg);
 }
 
-async function readStream(response, assistantId, mayFail = false) {
+async function readStream(response, assistantId, mayFail = false, firstChunkTimeoutMs = 0) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let rawText = '';
   let sawChunk = false;
+  let firstReadDone = false;
 
   const msgAtStart = getMessage(assistantId);
   if (msgAtStart) {
@@ -1745,7 +1757,22 @@ async function readStream(response, assistantId, mayFail = false) {
 
   while (true) {
     if (state.stopRequested) { try { await reader.cancel(); } catch (_) {} throw makeAbortError(); }
-    const { value, done } = await reader.read();
+    let readPromise = reader.read();
+    if (firstChunkTimeoutMs && !firstReadDone && !sawChunk) {
+      readPromise = Promise.race([
+        readPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`First token timeout after ${Math.round(firstChunkTimeoutMs / 1000)}s`)), firstChunkTimeoutMs))
+      ]);
+    }
+    let result;
+    try {
+      result = await readPromise;
+    } catch (err) {
+      try { await reader.cancel(); } catch (_) {}
+      throw err;
+    }
+    const { value, done } = result;
+    firstReadDone = true;
     if (done) break;
     const text = decoder.decode(value, { stream: true });
     rawText += text;
@@ -2495,24 +2522,25 @@ async function diagTestModels() {
 async function diagTestChat() {
   const model = getCurrentModel();
   if (!model) { showDiagStatus('Select a model first.', false); return; }
-  showDiagStatus(`Testing chat completion on ${model.name}…`, true);
+  showDiagStatus(`Testing chat completion on ${model.name}...`, true);
   try {
+    const started = performance.now();
     const res = await fetchWithTimeout(buildApiUrl('/chat/completions'), {
       method: 'POST', headers: apiHeaders(false),
       body: JSON.stringify({ model: model.id, messages: [{ role: 'user', content: 'Reply with the single word: OK' }], max_tokens: 16, stream: false })
     }, 45000);
+    const elapsed = ((performance.now() - started) / 1000).toFixed(1);
     state.diag.lastStatus = res.status;
     state.diag.lastContentType = res.headers.get('content-type') || '';
     if (!res.ok) throw new Error(await errorFromResponse(res));
     const data = await res.json();
     const text = extractFullResponse(data) || '(no text field returned)';
-    showDiagStatus(`Chat OK (HTTP ${res.status}). Model replied: ${shortText(text, 120)}`, true);
+    showDiagStatus(`Chat OK in ${elapsed}s (HTTP ${res.status}). Model replied: ${shortText(text, 120)}`, true);
   } catch (err) {
     state.diag.lastError = friendlyError(err);
     showDiagStatus(`Chat test failed: ${friendlyError(err)}`, false);
   }
 }
-
 async function diagTestCatalog() {
   showDiagStatus('Testing /v1/build-models…', true);
   const res = await fetchBuildCatalogModels();
