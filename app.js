@@ -2232,6 +2232,7 @@ function renderModelList() {
   const list = document.getElementById('modelList'); if (!list) return;
   const models = getModelsForCurrentTab();
   const current = getCurrentModel();
+  const search = (document.getElementById('modelSearch')?.value || '').trim().toLowerCase();
   if (!state.liveModels.length) {
     list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">NV</div><div class="empty-state-title">No live models loaded</div><div class="empty-state-desc">Add your API key and Worker URL, then click Refresh Models.</div></div>`;
     setModelMeta('No live models loaded. Click Refresh Models.');
@@ -2256,7 +2257,7 @@ function renderModelList() {
       </div>
     </div>`;
   }).join('');
-  if (state.modelTab === 'all' && !normalizeSearch(document.getElementById('modelSearch')?.value || '')) {
+  if (state.modelTab === 'all' && !search) {
     const favModels = models.filter(m => state.favourites.has(m.id));
     const recentModels = models.filter(m => recent.has(m.id) && !state.favourites.has(m.id));
     const otherModels = models.filter(m => !state.favourites.has(m.id) && !recent.has(m.id));
