@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.3';
-const BUILD_ID = '2026-07-activity-panel-scroll';
+const APP_VERSION = '3.1.4';
+const BUILD_ID = '2026-07-ios-keyboard-gap';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -3150,7 +3150,7 @@ function syncVisualViewportVars() {
   const visualHeight = vv?.height || layoutHeight;
   const focusedField = /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement?.tagName || '');
   const keyboardOpen = isMobile() && focusedField && layoutHeight - visualHeight > 140;
-  const height = Math.max(320, Math.round(keyboardOpen ? layoutHeight : visualHeight));
+  const height = Math.max(320, Math.round(visualHeight));
   const top = keyboardOpen ? 0 : Math.max(0, Math.round(vv?.offsetTop || 0));
   const standalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;
   const browserTopPad = isMobile() && !standalone ? 12 : 0;
