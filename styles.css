@@ -20,43 +20,6 @@ body {
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #444; }
 
-.update-banner {
-  position: fixed;
-  top: calc(64px + env(safe-area-inset-top));
-  left: 50%;
-  transform: translate(-50%, -130%);
-  z-index: 4500;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(118,185,0,0.5);
-  border-radius: var(--radius-md);
-  background: rgba(20,20,20,0.96);
-  box-shadow: var(--shadow);
-  color: var(--text-primary);
-  font-size: 12px;
-  transition: transform .25s ease;
-}
-.update-banner.open { transform: translate(-50%, 0); }
-.update-banner a,
-.update-banner button {
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--nvidia-green);
-  color: #000;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 7px 10px;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.update-banner.updating {
-  pointer-events: none;
-  opacity: 0.86;
-}
-
 .splash-overlay {
   position: fixed;
   inset: 0;
@@ -829,11 +792,6 @@ button, input, textarea, select { font: inherit; }
   .splash-shell h1 { font-size: 24px; }
   .splash-actions { flex-direction: column; }
   .splash-actions .btn { width: 100%; justify-content: center; }
-  .update-banner {
-    top: calc(58px + env(safe-area-inset-top));
-    width: calc(100vw - 24px);
-    justify-content: space-between;
-  }
   .modal { width: 94vw; max-height: 88dvh; }
   .modal-body { padding: 14px; }
   .modal-footer { padding: 12px 14px; }

@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.11';
-const BUILD_ID = '2026-07-reliable-update-button';
+const APP_VERSION = '3.0.12';
+const BUILD_ID = '2026-07-settings-only-update';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
@@ -2548,13 +2548,11 @@ function clearAllLocalData() {
   setTimeout(() => location.reload(), 600);
 }
 
-async function clearCacheAndReload() {
-  const banner = document.getElementById('updateBanner');
-  const updateBtn = document.getElementById('updateNowBtn') || banner?.querySelector('[data-action="clear-cache"]');
-  banner?.classList.add('updating');
-  if (updateBtn) {
-    updateBtn.textContent = 'Updating...';
-    updateBtn.setAttribute('aria-disabled', 'true');
+async function clearCacheAndReload(triggerEl) {
+  if (triggerEl) {
+    triggerEl.textContent = 'Updating...';
+    triggerEl.setAttribute('aria-disabled', 'true');
+    triggerEl.disabled = true;
   }
   showDiagStatus('Clearing caches and loading the newest build...', true);
   setSplashStatus('Clearing app cache and loading the newest GitHub Pages build...', true);
@@ -2854,7 +2852,7 @@ const CLICK_ACTIONS = {
   'export-debug': () => exportDebugLogs(),
   'export-settings': () => exportSettings(),
   'import-settings': () => importSettings(),
-  'clear-cache': () => clearCacheAndReload(),
+  'clear-cache': (el) => clearCacheAndReload(el),
   'delete-all-chats': () => { clearAllChats(); closePanel(); },
   'clear-all-data': () => clearAllLocalData(),
 };
@@ -2934,8 +2932,7 @@ function registerServiceWorker() {
       sw.addEventListener('statechange', () => {
         if (sw.state === 'installed' && navigator.serviceWorker.controller) {
           state.diag.swStatus = 'update available';
-          document.getElementById('updateBanner')?.classList.add('open');
-          showToast('A new version is ready. Use Clear cache & reload latest to update.');
+          showToast('A new version is ready. Open Settings and tap Update app now.');
         }
       });
     });
