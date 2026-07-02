@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.14';
-const BUILD_ID = '2026-07-deepseek-nonstream-profile';
+const APP_VERSION = '3.0.15';
+const BUILD_ID = '2026-07-deepseek-plain-payload';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -1597,10 +1597,11 @@ async function requestAssistantResponse(assistantId) {
     max_tokens: Math.max(Number(state.settings.maxTokens || 2048), modelSupportsReasoning(model) && state.settings.showThinking ? 4096 : 1),
     stream: !!state.settings.stream && !profile.preferNonStream
   };
-  const payload = { ...basePayload, ...reasoningExtrasForModel(model) };
+  const rawPayload = { ...basePayload, ...reasoningExtrasForModel(model) };
+  const payload = profile.stripReasoningOnFallback ? stripReasoningExtras(rawPayload) : rawPayload;
   if (profile.preferNonStream && startMsg) {
-    startMsg.thinking += `${model.name} is using non-stream mode for better reliability on NVIDIA's endpoint.\n`;
-    recordStreamEvent(startMsg, 'Model profile', 'Prefer non-stream for this model');
+    startMsg.thinking += `${model.name} is using a plain non-stream request for better reliability on NVIDIA's endpoint.\n`;
+    recordStreamEvent(startMsg, 'Model profile', 'Prefer plain non-stream for this model');
     updateAssistantDom(startMsg);
   }
 
