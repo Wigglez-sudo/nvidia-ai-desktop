@@ -1,8 +1,9 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.7';
-const BUILD_ID = '2026-07-ios-focus-composer';
+const APP_VERSION = '3.2.0';
+const BUILD_ID = '2026-07-final-release';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
+const DEFAULT_USER_NAME = 'User';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
 const NON_STREAM_RETRY_TIMEOUT_MS = 90000;
 const SETTINGS_KEY = 'nvidia_ai_desktop_settings_v8_plugins';
@@ -164,7 +165,7 @@ const state = {
   settings: {
     apiKey: '',
     proxyUrl: DEFAULT_PROXY_URL,
-    userName: 'Luke',
+    userName: DEFAULT_USER_NAME,
     temperature: 0.7,
     maxTokens: 2048,
     stream: true,
@@ -283,7 +284,7 @@ function recordRawStreamSample(msg, sample) {
   const debug = ensureStreamDebug(msg);
   if (!debug) return;
   // Keep a tiny sample buffer for optional exported diagnostics, but do not render
-  // raw payloads in chat. Luke only wants the readable event timeline in the UI.
+  // raw payloads in chat. Keep the readable event timeline in the UI.
   const text = shortText(sample, 400);
   if (text.trim() && debug.rawSamples.length < 3) debug.rawSamples.push(text);
 }
@@ -523,6 +524,7 @@ function loadState() {
   state.settings.plugins = { ...DEFAULT_PLUGINS, ...(state.settings.plugins || {}) };
   state.settings.recentModelIds = Array.isArray(state.settings.recentModelIds) ? state.settings.recentModelIds.slice(0, 5) : [];
   if (!state.settings.proxyUrl) state.settings.proxyUrl = DEFAULT_PROXY_URL;
+  if (!state.settings.userName) state.settings.userName = DEFAULT_USER_NAME;
   restoreConnectionBackup();
   state.settings.showThinking = !!state.settings.plugins.thinkingDisplay;
   const cache = loadJson(MODEL_CACHE_KEY, { models: [], updatedAt: 0 });
@@ -794,7 +796,7 @@ function renderChatHistory() {
       <span class="chat-history-actions">
         <button class="chat-mini-btn" data-action="pin-chat" data-chat-id="${id}" title="${chat.pinned ? 'Unpin' : 'Pin'}" aria-label="Pin chat">${chat.pinned ? 'PIN' : 'PIN'}</button>
         <button class="chat-mini-btn" data-action="rename-chat" data-chat-id="${id}" title="Rename" aria-label="Rename chat">EDIT</button>
-        <button class="chat-mini-btn danger" data-action="delete-chat" data-chat-id="${id}" title="Delete" aria-label="Delete chat">x</button>
+        <button class="chat-mini-btn chat-delete-btn danger" data-action="delete-chat" data-chat-id="${id}" title="Delete" aria-label="Delete chat">x</button>
       </span>
     </div>`;
   }).join('');
@@ -1497,10 +1499,11 @@ function handleKeydown(event) {
   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }
 }
 function autoResize(el) {
-  const maxHeight = isMobile() && document.body.classList.contains('keyboard-open') ? 120 : 200;
+  const maxHeight = isMobile() && document.body.classList.contains('keyboard-open') ? 160 : 220;
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
   el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  el.style.overflowX = 'hidden';
 }
 function scrollToBottom(smooth = true) { const c = document.getElementById('chatContainer'); if (c) c.scrollTo({ top: c.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); }
 function shouldAutoScrollChat(container) {
@@ -2390,7 +2393,7 @@ function closeSettings() { document.getElementById('settingsModal').classList.re
 function saveSettings() {
   state.settings.apiKey = document.getElementById('apiKeyInput').value.trim();
   state.settings.proxyUrl = stripSlash(document.getElementById('proxyUrlInput').value);
-  state.settings.userName = document.getElementById('userNameInput').value.trim() || 'Luke';
+  state.settings.userName = document.getElementById('userNameInput').value.trim() || DEFAULT_USER_NAME;
   state.settings.temperature = Number(document.getElementById('tempSlider').value || 0.7);
   state.settings.maxTokens = Number(document.getElementById('maxTokensSelect').value || 2048);
   state.settings.stream = document.getElementById('streamSelect').value === 'yes';

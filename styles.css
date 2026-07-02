@@ -375,10 +375,11 @@ body {
   border-color: var(--nvidia-green); box-shadow: 0 0 0 3px var(--nvidia-green-dim);
 }
 .input-box {
-  width: 100%; min-height: 24px; max-height: 200px;
+  width: 100%; min-width: 0; min-height: 24px; max-height: 220px;
   background: transparent; border: none; outline: none;
   color: var(--text-primary); font-size: 14px;
-  font-family: inherit; resize: none; line-height: 1.5; overflow-y: hidden;
+  font-family: inherit; resize: none; line-height: 1.5;
+  overflow-y: hidden; overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
 }
 .input-box::placeholder { color: var(--text-muted); }
 .input-footer {
@@ -870,7 +871,13 @@ button, input, textarea, select { font: inherit; }
     margin-right: auto;
   }
   body.keyboard-open .input-wrapper { padding: 10px 12px; }
-  body.keyboard-open .input-box { max-height: 120px; }
+  body.keyboard-open .input-box {
+    max-height: 160px;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
   body.keyboard-open .input-footer { margin-top: 6px; padding-top: 6px; }
   .model-dropdown {
     position: fixed;
@@ -991,10 +998,9 @@ button, input, textarea, select { font: inherit; }
 .chat-delete-btn {
   position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
   width: 22px; height: 22px; border-radius: 6px; border: 1px solid transparent;
-  background: transparent; color: var(--text-muted); cursor: pointer; display: none;
+  background: transparent; color: var(--text-muted); cursor: pointer; display: flex;
   align-items: center; justify-content: center; font-size: 16px; line-height: 1;
 }
-.chat-history-item:hover .chat-delete-btn { display: flex; }
 .chat-delete-btn:hover { color: var(--danger); border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.12); }
 .status-card { appearance: none; -webkit-appearance: none; min-height: 54px; border-radius: 0; }
 .status-card .user-avatar, .user-avatar#statusAvatar {
