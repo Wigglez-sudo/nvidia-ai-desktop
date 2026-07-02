@@ -1428,17 +1428,22 @@ function attachmentTypeBadge(att) {
   return 'TXT';
 }
 
+function attachmentTotalBytes(attachments = []) {
+  return attachments.reduce((sum, att) => sum + (Number(att?.size) || 0), 0);
+}
+
 function renderPendingAttachments() {
   const el = document.getElementById('pendingAttachments');
   if (!el) return;
   if (!state.pendingAttachments.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = 'flex';
+  const totalBytes = attachmentTotalBytes(state.pendingAttachments);
   const summary = state.pendingAttachments.length > 1
     ? `<button class="attachment-chip attachment-chip-summary" type="button" data-action="attach" title="Add more files">
         <span class="attachment-icon">+</span>
         <div class="attachment-info">
           <div class="attachment-name">${state.pendingAttachments.length} files attached</div>
-          <div class="attachment-meta">Tap to add more</div>
+          <div class="attachment-meta">${escapeHtml(formatBytes(totalBytes))} total · tap to add more</div>
         </div>
       </button>`
     : '';
