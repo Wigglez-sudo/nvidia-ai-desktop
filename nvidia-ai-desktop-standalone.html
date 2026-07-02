@@ -870,6 +870,7 @@ button, input, textarea, select { font: inherit; }
 @media (max-width: 768px) {
   body { min-height: var(--app-height); }
   .input-area { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  body.keyboard-open .input-area { padding-bottom: 10px; }
   .model-dropdown {
     position: fixed;
     left: 10px;
@@ -1540,7 +1541,7 @@ body.dragging-files::after {
         <div class="user-name" id="statusName">Luke</div>
         <div class="user-plan" id="statusText">Disconnected</div>
       </div>
-      <span class="app-version-badge" id="appVersionLabel">v3.1.0</span>
+      <span class="app-version-badge" id="appVersionLabel">v3.1.1</span>
     </button>
   </aside>
 
@@ -1765,8 +1766,8 @@ body.dragging-files::after {
   <div class="toast-container" id="toastContainer"></div>
   <script>
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.0';
-const BUILD_ID = '2026-07-ui-clarity-pass';
+const APP_VERSION = '3.1.1';
+const BUILD_ID = '2026-07-ios-keyboard-viewport';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -4804,10 +4805,15 @@ function registerIOSZoomGuards() {
 
 function syncVisualViewportVars() {
   const vv = window.visualViewport;
-  const height = Math.max(320, Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight || 0));
-  const top = Math.max(0, Math.round(vv?.offsetTop || 0));
+  const layoutHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visualHeight = vv?.height || layoutHeight;
+  const focusedField = /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement?.tagName || '');
+  const keyboardOpen = isMobile() && focusedField && layoutHeight - visualHeight > 140;
+  const height = Math.max(320, Math.round(keyboardOpen ? layoutHeight : visualHeight));
+  const top = keyboardOpen ? 0 : Math.max(0, Math.round(vv?.offsetTop || 0));
   const standalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;
   const browserTopPad = isMobile() && !standalone ? 12 : 0;
+  document.body.classList.toggle('keyboard-open', keyboardOpen);
   document.documentElement.style.setProperty('--app-height', `${height}px`);
   document.documentElement.style.setProperty('--vv-top', `${top}px`);
   document.documentElement.style.setProperty('--browser-top-pad', `${browserTopPad}px`);
@@ -4827,7 +4833,9 @@ function bindInputHandlers() {
   const input = document.getElementById('inputBox');
   if (input) {
     input.addEventListener('keydown', handleKeydown);
-    input.addEventListener('input', () => { autoResize(input); updateSendButton(); });
+    input.addEventListener('input', () => { autoResize(input); updateSendButton(); syncVisualViewportVars(); });
+    input.addEventListener('focus', () => setTimeout(syncVisualViewportVars, 80));
+    input.addEventListener('blur', () => setTimeout(syncVisualViewportVars, 120));
   }
 }
 

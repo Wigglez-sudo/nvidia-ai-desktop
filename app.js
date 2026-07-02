@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.0';
-const BUILD_ID = '2026-07-ui-clarity-pass';
+const APP_VERSION = '3.1.1';
+const BUILD_ID = '2026-07-ios-keyboard-viewport';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -3038,10 +3038,15 @@ function registerIOSZoomGuards() {
 
 function syncVisualViewportVars() {
   const vv = window.visualViewport;
-  const height = Math.max(320, Math.round(vv?.height || window.innerHeight || document.documentElement.clientHeight || 0));
-  const top = Math.max(0, Math.round(vv?.offsetTop || 0));
+  const layoutHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const visualHeight = vv?.height || layoutHeight;
+  const focusedField = /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement?.tagName || '');
+  const keyboardOpen = isMobile() && focusedField && layoutHeight - visualHeight > 140;
+  const height = Math.max(320, Math.round(keyboardOpen ? layoutHeight : visualHeight));
+  const top = keyboardOpen ? 0 : Math.max(0, Math.round(vv?.offsetTop || 0));
   const standalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;
   const browserTopPad = isMobile() && !standalone ? 12 : 0;
+  document.body.classList.toggle('keyboard-open', keyboardOpen);
   document.documentElement.style.setProperty('--app-height', `${height}px`);
   document.documentElement.style.setProperty('--vv-top', `${top}px`);
   document.documentElement.style.setProperty('--browser-top-pad', `${browserTopPad}px`);
@@ -3061,7 +3066,9 @@ function bindInputHandlers() {
   const input = document.getElementById('inputBox');
   if (input) {
     input.addEventListener('keydown', handleKeydown);
-    input.addEventListener('input', () => { autoResize(input); updateSendButton(); });
+    input.addEventListener('input', () => { autoResize(input); updateSendButton(); syncVisualViewportVars(); });
+    input.addEventListener('focus', () => setTimeout(syncVisualViewportVars, 80));
+    input.addEventListener('blur', () => setTimeout(syncVisualViewportVars, 120));
   }
 }
 

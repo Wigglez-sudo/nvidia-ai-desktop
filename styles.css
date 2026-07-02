@@ -852,6 +852,7 @@ button, input, textarea, select { font: inherit; }
 @media (max-width: 768px) {
   body { min-height: var(--app-height); }
   .input-area { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  body.keyboard-open .input-area { padding-bottom: 10px; }
   .model-dropdown {
     position: fixed;
     left: 10px;
