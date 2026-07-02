@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.16';
-const BUILD_ID = '2026-07-ios-browser-viewport';
+const APP_VERSION = '3.0.17';
+const BUILD_ID = '2026-07-chat-history-dedupe';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -457,6 +457,17 @@ function migrateLegacyStorage() {
   }
 }
 
+function normalizeChats() {
+  const seen = new Set();
+  state.chats = (Array.isArray(state.chats) ? state.chats : []).filter(chat => {
+    if (!chat || !chat.id || seen.has(chat.id)) return false;
+    seen.add(chat.id);
+    if (!Array.isArray(chat.messages)) chat.messages = [];
+    if (!chat.title) chat.title = 'New Chat';
+    return true;
+  });
+}
+
 function loadState() {
   migrateLegacyStorage();
   state.settings = { ...state.settings, ...loadJson(SETTINGS_KEY, {}) };
@@ -468,13 +479,18 @@ function loadState() {
   state.liveModels = Array.isArray(cache.models) ? cache.models.map(normalizeModel).filter(Boolean) : [];
   state.favourites = new Set(loadJson(FAV_KEY, []));
   state.chats = loadJson(CHATS_KEY, []);
+  normalizeChats();
   const currentId = localStorage.getItem(CURRENT_CHAT_KEY);
   state.currentChat = state.chats.find(c => c.id === currentId) || state.chats[0] || createChat(false);
   applyTheme();
 }
 
 function persistSettings() { saveJson(SETTINGS_KEY, state.settings); persistConnectionBackup(); }
-function persistChats() { saveJson(CHATS_KEY, state.chats); if (state.currentChat) localStorage.setItem(CURRENT_CHAT_KEY, state.currentChat.id); }
+function persistChats() {
+  normalizeChats();
+  saveJson(CHATS_KEY, state.chats);
+  if (state.currentChat) localStorage.setItem(CURRENT_CHAT_KEY, state.currentChat.id);
+}
 function persistModels() { saveJson(MODEL_CACHE_KEY, { models: state.liveModels.map(m => m.raw || m), updatedAt: Date.now() }); }
 function persistFavourites() { saveJson(FAV_KEY, [...state.favourites]); }
 
@@ -763,7 +779,6 @@ function deleteChat(id, event) {
   state.chats = state.chats.filter(c => c.id !== id);
   if (!state.chats.length) {
     state.currentChat = createChat(false);
-    state.chats.unshift(state.currentChat);
   } else if (state.currentChat?.id === id) {
     state.currentChat = state.chats[0];
   }
@@ -777,7 +792,6 @@ function clearAllChats() {
   if (!confirm('Delete all chats? This cannot be undone.')) return;
   state.chats = [];
   state.currentChat = createChat(false);
-  state.chats.unshift(state.currentChat);
   state.editingMessageId = null;
   persistChats();
   renderAll();
