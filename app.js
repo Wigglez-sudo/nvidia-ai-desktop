@@ -1422,14 +1422,30 @@ function attachmentKindLabel(att) {
   return att?.language || 'text';
 }
 
+function attachmentTypeBadge(att) {
+  if (att?.kind === 'image') return 'IMG';
+  if (att?.kind === 'archive') return 'ZIP';
+  return 'TXT';
+}
+
 function renderPendingAttachments() {
   const el = document.getElementById('pendingAttachments');
   if (!el) return;
   if (!state.pendingAttachments.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = 'flex';
-  el.innerHTML = state.pendingAttachments.map(att => `
+  const summary = state.pendingAttachments.length > 1
+    ? `<button class="attachment-chip attachment-chip-summary" type="button" data-action="attach" title="Add more files">
+        <span class="attachment-icon">+</span>
+        <div class="attachment-info">
+          <div class="attachment-name">${state.pendingAttachments.length} files attached</div>
+          <div class="attachment-meta">Tap to add more</div>
+        </div>
+      </button>`
+    : '';
+
+  el.innerHTML = summary + state.pendingAttachments.map(att => `
     <div class="attachment-chip" title="${escapeAttr(att.name)}">
-      <span class="attachment-icon">${att.kind === 'image' ? 'IMG' : att.kind === 'archive' ? 'ZIP' : 'FILE'}</span>
+      <span class="attachment-icon">${attachmentTypeBadge(att)}</span>
       <div class="attachment-info">
         <div class="attachment-name">${escapeHtml(att.name)}</div>
         <div class="attachment-meta">${escapeHtml(attachmentKindLabel(att))} - ${escapeHtml(formatBytes(att.size))}</div>
