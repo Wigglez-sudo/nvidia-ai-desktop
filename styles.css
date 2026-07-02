@@ -978,6 +978,27 @@ button, input, textarea, select { font: inherit; }
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
 }
+.attachment-chip-add-more {
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+.attachment-chip-add-more:hover {
+  border-color: var(--nvidia-green);
+  background: rgba(118, 185, 0, 0.08);
+  transform: translateY(-1px);
+}
+.attachment-chip-add-more .attachment-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(118, 185, 0, 0.14);
+  color: var(--nvidia-green);
+  font-weight: 700;
+}
 .attachment-icon { flex-shrink: 0; }
 .attachment-info { min-width: 0; }
 .attachment-name {

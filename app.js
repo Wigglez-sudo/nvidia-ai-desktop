@@ -1237,6 +1237,14 @@ function openFilePicker() {
   const input = document.getElementById('fileInput');
   if (!input) { showToast('File picker is not available.', 'error'); return; }
   input.value = '';
+  if (typeof input.showPicker === 'function') {
+    try {
+      input.showPicker();
+      return;
+    } catch (err) {
+      // Fall back to click() for browsers that expose showPicker but still block it.
+    }
+  }
   input.click();
 }
 
@@ -1427,7 +1435,14 @@ function renderPendingAttachments() {
         <div class="attachment-meta">${escapeHtml(attachmentKindLabel(att))} - ${escapeHtml(formatBytes(att.size))}</div>
       </div>
       <button class="attachment-remove" type="button" data-action="remove-attachment" data-att-id="${escapeAttr(att.id)}" title="Remove attachment">x</button>
-    </div>`).join('');
+    </div>`).join('') + `
+    <button class="attachment-chip attachment-chip-add-more" type="button" data-action="attach" title="Add more files">
+      <span class="attachment-icon">+</span>
+      <div class="attachment-info">
+        <div class="attachment-name">Add more</div>
+        <div class="attachment-meta">Keep attaching files or ZIPs</div>
+      </div>
+    </button>`;
   syncComposerMetrics();
 }
 
