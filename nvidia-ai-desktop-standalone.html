@@ -1541,7 +1541,7 @@ body.dragging-files::after {
         <div class="user-name" id="statusName">Luke</div>
         <div class="user-plan" id="statusText">Disconnected</div>
       </div>
-      <span class="app-version-badge" id="appVersionLabel">v3.1.2</span>
+      <span class="app-version-badge" id="appVersionLabel">v3.1.3</span>
     </button>
   </aside>
 
@@ -1766,8 +1766,8 @@ body.dragging-files::after {
   <div class="toast-container" id="toastContainer"></div>
   <script>
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.2';
-const BUILD_ID = '2026-07-vision-image-attachments';
+const APP_VERSION = '3.1.3';
+const BUILD_ID = '2026-07-activity-panel-scroll';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -1960,6 +1960,7 @@ const state = {
   voiceRecognition: null,
   pendingAttachments: [],
   openThinking: new Set(),
+  openRawDebug: new Set(),
   chatSearch: '',
   loadedAt: '',
   diag: { swStatus: 'unknown', workerRoutes: [], workerVersion: '', lastStatus: '', lastContentType: '', lastEvents: null, lastError: '' }
@@ -2078,6 +2079,16 @@ function streamEventsListHtml(msg) {
   return `<div class="stream-events-list">${events.map(e => `<div class="stream-event"><strong>${escapeHtml(e.t)}</strong><span>${escapeHtml(e.label)}${e.details ? ` - ${escapeHtml(e.details)}` : ''}</span></div>`).join('')}</div>`;
 }
 
+function visibleThinkingText(msg) {
+  let text = String(msg?.thinking || '');
+  if (msg?.content) {
+    text = text
+      .replace(/Reasoning params were rejected by NVIDIA for this model, retrying without extra thinking flags\. Original error:[\s\S]*?(?=\n(?:We have|The user|I |Let's|$)|$)/i, '')
+      .replace(/The selected model did not start streaming within \d+ seconds\. Retrying once without streaming[^\n]*\n?/i, '');
+  }
+  return text.trim();
+}
+
 function streamSummaryHtml(msg) {
   if (!msg?.debug) return '';
   const d = msg.debug;
@@ -2096,18 +2107,21 @@ function streamSummaryHtml(msg) {
 
 function thinkingDetailsHtml(msg) {
   if (!msg || msg.role === 'user') return '';
-  const hasThinking = state.settings.showThinking && !!msg.thinking;
+  const visibleThinking = visibleThinkingText(msg);
+  const hasThinking = state.settings.showThinking && !!visibleThinking;
   const hasContentPreview = state.settings.showThinking && !!msg.content;
   const hasSummary = !!msg.debug;
   const hasEvents = state.settings.streamDiagnostics && !!msg.debug;
   if (!hasThinking && !hasContentPreview && !hasSummary) return '';
   const summary = streamDebugSummary(msg) || (msg.loading ? 'working' : 'complete');
   const contentText = hasContentPreview ? `<div class="thinking-section-title">Content preview</div><div class="thinking-public-text">${escapeHtml(shortText(msg.content, 3000))}</div>` : '';
-  const thinkingText = hasThinking ? `<div class="thinking-section-title">Reasoning / notes</div><div class="thinking-public-text">${escapeHtml(msg.thinking)}</div>` : '';
+  const thinkingText = hasThinking ? `<div class="thinking-section-title">Reasoning / notes</div><div class="thinking-public-text">${escapeHtml(visibleThinking)}</div>` : '';
   const summaryText = hasSummary ? `<div class="thinking-section-title">Stream summary</div>${streamSummaryHtml(msg)}` : '';
-  const eventText = hasEvents ? `<details class="raw-debug-details"><summary>Raw debug events</summary>${streamEventsListHtml(msg)}</details>` : '';
   const id = msg.id || '';
   const openAttr = id && state.openThinking?.has(id) ? ' open' : '';
+  const rawId = id ? `${id}:raw` : '';
+  const rawOpenAttr = rawId && state.openRawDebug?.has(rawId) ? ' open' : '';
+  const eventText = hasEvents ? `<details class="raw-debug-details" data-raw-debug-id="${escapeAttr(rawId)}"${rawOpenAttr}><summary>Raw debug events</summary>${streamEventsListHtml(msg)}</details>` : '';
   return `<details class="thinking-block thinking-details" data-thinking-id="${escapeAttr(id)}"${openAttr}><summary class="thinking-header"><span class="activity-icon">AI</span><div class="thinking-title">Activity Panel</div><span class="thinking-toggle">${escapeHtml(summary)}</span></summary><div class="thinking-body">${contentText}${thinkingText}${summaryText}${eventText}</div></details>`;
 }
 function streamDebugHtml(msg) {
@@ -3250,6 +3264,13 @@ function handleKeydown(event) {
 }
 function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px'; }
 function scrollToBottom(smooth = true) { const c = document.getElementById('chatContainer'); if (c) c.scrollTo({ top: c.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); }
+function shouldAutoScrollChat(container) {
+  if (!container) return false;
+  const focused = document.activeElement;
+  const typingInComposer = focused?.id === 'inputBox' || !!focused?.closest?.('.input-area');
+  if (typingInComposer) return false;
+  return container.scrollHeight - container.scrollTop - container.clientHeight < 160;
+}
 
 function stopResponse() {
   if (!state.isBusy && !state.activeAbortController) return;
@@ -3541,7 +3562,7 @@ async function requestAssistantResponse(assistantId) {
       const msg = getMessage(assistantId);
       if (msg) {
         msg.content = '';
-        msg.thinking += `The selected model did not start streaming within ${Math.round(STREAM_FIRST_TOKEN_TIMEOUT_MS / 1000)} seconds. Retrying once without streaming${profile.stripReasoningOnFallback ? ' and without extra reasoning flags' : ''}; this often helps when NVIDIA has a cold or congested endpoint.\n`;
+        msg.status = `Retrying without streaming${profile.stripReasoningOnFallback ? ', no reasoning flags' : ''}`;
         recordStreamEvent(msg, 'Retrying without streaming', text);
         updateAssistantDom(msg);
       }
@@ -3551,7 +3572,7 @@ async function requestAssistantResponse(assistantId) {
       const msg = getMessage(assistantId);
       if (msg) {
         msg.content = '';
-        msg.thinking += `Reasoning params were rejected by NVIDIA for this model, retrying without extra thinking flags. Original error: ${text}\n`;
+        msg.status = 'Retrying without reasoning flags';
         recordStreamEvent(msg, 'Retrying without reasoning parameters', text);
         updateAssistantDom(msg);
       }
@@ -3752,6 +3773,9 @@ function extractDelta(json) {
 
 function updateAssistantDom(msg) {
   const body = document.getElementById(`body_${msg.id}`);
+  const container = document.getElementById('chatContainer');
+  const autoScroll = shouldAutoScrollChat(container);
+  const previousTop = container?.scrollTop || 0;
   if (body) {
     const thinking = thinkingDetailsHtml(msg);
     const debug = '';
@@ -3760,7 +3784,8 @@ function updateAssistantDom(msg) {
     const webSearch = webSearchCardHtml(msg);
     body.innerHTML = thinking + debug + webSearch + generatedFiles + (msg.content ? renderMarkdown(msg.content, { hideGeneratedFiles: true }) : progress);
   }
-  scrollToBottom(true);
+  if (autoScroll) scrollToBottom(true);
+  else if (container) container.scrollTop = previousTop;
 }
 
 function editUserMessage(id) {
@@ -4864,6 +4889,13 @@ function registerDelegatedEvents() {
   });
 
   document.addEventListener('toggle', (event) => {
+    const rawDetails = event.target?.closest?.('.raw-debug-details[data-raw-debug-id]');
+    const rawId = rawDetails?.dataset?.rawDebugId;
+    if (rawId) {
+      if (rawDetails.open) state.openRawDebug.add(rawId);
+      else state.openRawDebug.delete(rawId);
+      return;
+    }
     const details = event.target?.closest?.('.thinking-details[data-thinking-id]');
     const id = details?.dataset?.thinkingId;
     if (!id) return;
