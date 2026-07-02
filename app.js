@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.0.13';
-const BUILD_ID = '2026-07-slow-model-fallback';
+const APP_VERSION = '3.0.14';
+const BUILD_ID = '2026-07-deepseek-nonstream-profile';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -239,6 +239,19 @@ function reasoningExtrasForModel(model) {
   };
   if (/nemotron-3|nemotron/.test(id)) extras.thinking_token_budget = Math.min(4096, Math.max(512, Math.floor(Number(state.settings.maxTokens || 4096) / 2)));
   return extras;
+}
+
+function modelRequestProfile(model) {
+  const id = `${model?.id || ''} ${model?.name || ''}`.toLowerCase();
+  return {
+    preferNonStream: /deepseek[-_\s/]*v4[-_\s/]*pro|deepseek-v4-pro/.test(id),
+    stripReasoningOnFallback: /deepseek/.test(id)
+  };
+}
+
+function stripReasoningExtras(payload) {
+  const { include_reasoning, chat_template_kwargs, thinking_token_budget, ...rest } = payload || {};
+  return rest;
 }
 
 function ensureStreamDebug(msg, payload = null) {
@@ -1572,6 +1585,7 @@ function formatWebSearchContext(query, results) {
 
 async function requestAssistantResponse(assistantId) {
   const model = getCurrentModel();
+  const profile = modelRequestProfile(model);
   const startMsg = getMessage(assistantId);
   if (startMsg) { startMsg.status = 'Thinking'; ensureStreamDebug(startMsg); recordStreamEvent(startMsg, 'Prompt queued'); updateAssistantDom(startMsg); }
   const webContext = await maybeBuildWebSearchContext(assistantId);
@@ -1581,9 +1595,14 @@ async function requestAssistantResponse(assistantId) {
     messages: buildConversationMessages(webContext),
     temperature: Number(state.settings.temperature || 0.7),
     max_tokens: Math.max(Number(state.settings.maxTokens || 2048), modelSupportsReasoning(model) && state.settings.showThinking ? 4096 : 1),
-    stream: !!state.settings.stream
+    stream: !!state.settings.stream && !profile.preferNonStream
   };
   const payload = { ...basePayload, ...reasoningExtrasForModel(model) };
+  if (profile.preferNonStream && startMsg) {
+    startMsg.thinking += `${model.name} is using non-stream mode for better reliability on NVIDIA's endpoint.\n`;
+    recordStreamEvent(startMsg, 'Model profile', 'Prefer non-stream for this model');
+    updateAssistantDom(startMsg);
+  }
 
   const sendPayload = async (bodyPayload, retryLabel = '') => {
     const responseMsg = getMessage(assistantId);
@@ -1651,11 +1670,12 @@ async function requestAssistantResponse(assistantId) {
       const msg = getMessage(assistantId);
       if (msg) {
         msg.content = '';
-        msg.thinking += `The selected model did not start streaming within ${Math.round(STREAM_FIRST_TOKEN_TIMEOUT_MS / 1000)} seconds. Retrying once without streaming; this often helps when NVIDIA has a cold or congested endpoint.\n`;
+        msg.thinking += `The selected model did not start streaming within ${Math.round(STREAM_FIRST_TOKEN_TIMEOUT_MS / 1000)} seconds. Retrying once without streaming${profile.stripReasoningOnFallback ? ' and without extra reasoning flags' : ''}; this often helps when NVIDIA has a cold or congested endpoint.\n`;
         recordStreamEvent(msg, 'Retrying without streaming', text);
         updateAssistantDom(msg);
       }
-      await sendPayload({ ...payload, stream: false }, ' (retry without streaming)');
+      const retryPayload = profile.stripReasoningOnFallback ? stripReasoningExtras(payload) : payload;
+      await sendPayload({ ...retryPayload, stream: false }, ` (retry without streaming${profile.stripReasoningOnFallback ? ', no reasoning flags' : ''})`);
     } else if ((payload.chat_template_kwargs || payload.include_reasoning || payload.thinking_token_budget) && /HTTP (400|422|500)|invalid|unsupported|chat_template|thinking|reasoning/i.test(text)) {
       const msg = getMessage(assistantId);
       if (msg) {
