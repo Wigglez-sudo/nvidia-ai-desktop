@@ -4,8 +4,33 @@ NViMi AI is a browser-based NVIDIA chat app with a Kimi-style UI, live model loa
 
 Final release: `v3.2.0`
 
-Live app: <https://wigglez-sudo.github.io/nvidia-ai-desktop/>
-Worker URL: <https://nvidia-ai-proxy.lukewai.workers.dev>
+| Link | URL |
+| --- | --- |
+| Live app | <https://wigglez-sudo.github.io/nvidia-ai-desktop/> |
+| Worker | <https://nvidia-ai-proxy.lukewai.workers.dev> |
+| GitHub Pages cache-bust | <https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.2.0> |
+
+## Quick Start
+
+1. Open the live app.
+2. Go to Settings.
+3. Add your NVIDIA API key.
+4. Confirm the Worker URL is `https://nvidia-ai-proxy.lukewai.workers.dev`.
+5. Choose your display name.
+6. Tap `Refresh Models`.
+7. Pick a model and start chatting.
+
+## Feature Table
+
+| Area | What it includes |
+| --- | --- |
+| Chat | Streaming replies, stop response, regenerate, edit, copy, download, and persistent chat history. |
+| Models | Live NVIDIA model loading, Free Endpoint fallback tags, favourites, recents, search, and capability badges. |
+| iOS | PWA support, safe-area handling, fixed keyboard/composer behavior, and touch-friendly chat deletion. |
+| Files | Text/code/data/image attachments, hidden upload content where possible, generated-file detection, per-file download, and ZIP export. |
+| Plugins | Web Search, File Reader, Download Buttons, Prefer File Outputs, Artifact Preview, Thinking Display, and Long Context. |
+| Diagnostics | Worker probe, model tests, current-model test, web-search test, build-catalog test, debug export, cache clear, and local-data cleanup. |
+| Security | No hard-coded API keys. Keys stay in browser storage and requests go through the Cloudflare Worker. |
 
 ## Final Release
 
@@ -49,6 +74,22 @@ Worker URL: <https://nvidia-ai-proxy.lukewai.workers.dev>
 - `Thinking Display` shows model activity and reasoning when available.
 - `Long Context` sends more chat history when enabled.
 
+## Release Map
+
+| Version | Theme |
+| --- | --- |
+| `v3.2.0` | Final beta merge, iOS wrapping, chat delete touch targets, model picker refinement, username cleanup. |
+| `v3.1.x` | iOS keyboard, composer, activity panel, send-scroll, and vision upload hardening. |
+| `v3.0.9` | NViMi branding, iOS uploads, and thinking/activity improvements. |
+| `v3.0.8` | Artifact and model-picker polish plus service-worker update banner. |
+| `v3.0.7` | Splash setup and force-update flow. |
+| `v3.0.6` | Settings persistence on iOS. |
+| `v3.0.5` | Safe-area toolbar fixes. |
+| `v3.0.4` | Regenerate stop behavior and Worker default stability. |
+| `v3.0.3` | Stop response button. |
+| `v3.0.2` | Generated-file download reliability. |
+| `v3.0.1` | Chat/history cleanup and early UI clarity work. |
+
 ## Full Release History
 
 ### v3.2.0 - Final beta merge
@@ -57,6 +98,7 @@ Worker URL: <https://nvidia-ai-proxy.lukewai.workers.dev>
 - Fixed iOS long-prompt wrapping in the composer.
 - Fixed individual chat delete buttons on touch devices.
 - Replaced the default personal display name with a generic user profile.
+- Refined the model picker into a clearer, grouped model list.
 - Bumped service-worker cache to `nvidia-ai-desktop-v3-2-0`.
 - Regenerated the standalone HTML build from the final app files.
 
