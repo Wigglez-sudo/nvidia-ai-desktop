@@ -378,7 +378,7 @@ body {
   width: 100%; min-height: 24px; max-height: 200px;
   background: transparent; border: none; outline: none;
   color: var(--text-primary); font-size: 14px;
-  font-family: inherit; resize: none; line-height: 1.5;
+  font-family: inherit; resize: none; line-height: 1.5; overflow-y: hidden;
 }
 .input-box::placeholder { color: var(--text-muted); }
 .input-footer {
@@ -869,6 +869,9 @@ button, input, textarea, select { font: inherit; }
     margin-left: auto;
     margin-right: auto;
   }
+  body.keyboard-open .input-wrapper { padding: 10px 12px; }
+  body.keyboard-open .input-box { max-height: 120px; }
+  body.keyboard-open .input-footer { margin-top: 6px; padding-top: 6px; }
   .model-dropdown {
     position: fixed;
     left: 10px;

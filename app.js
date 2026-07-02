@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.6';
-const BUILD_ID = '2026-07-send-scroll-bottom';
+const APP_VERSION = '3.1.7';
+const BUILD_ID = '2026-07-ios-focus-composer';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -1496,7 +1496,12 @@ function updateSendButton() {
 function handleKeydown(event) {
   if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }
 }
-function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px'; }
+function autoResize(el) {
+  const maxHeight = isMobile() && document.body.classList.contains('keyboard-open') ? 120 : 200;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
+  el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
 function scrollToBottom(smooth = true) { const c = document.getElementById('chatContainer'); if (c) c.scrollTo({ top: c.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }); }
 function shouldAutoScrollChat(container) {
   if (!container) return false;
@@ -3162,7 +3167,7 @@ function syncVisualViewportVars() {
   const layoutHeight = window.innerHeight || document.documentElement.clientHeight || 0;
   const visualHeight = vv?.height || layoutHeight;
   const focusedField = /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement?.tagName || '');
-  const keyboardOpen = isMobile() && focusedField && layoutHeight - visualHeight > 140;
+  const keyboardOpen = isMobile() && focusedField;
   const height = Math.max(320, Math.round(visualHeight));
   const top = keyboardOpen ? 0 : Math.max(0, Math.round(vv?.offsetTop || 0));
   const standalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;

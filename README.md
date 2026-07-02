@@ -7,7 +7,7 @@ A NVIDIA-powered, Kimi-style AI chat app that runs as a static site on **GitHub 
 - Live site: https://wigglez-sudo.github.io/nvidia-ai-desktop/
 - Worker: https://nvidia-ai-proxy.lukewai.workers.dev
 
-This is **v3.1.6**, a send-scroll polish patch on top of the v3.1.0 UI clarity baseline, v3.1.2 vision attachment support, and v3.1.5 iOS composer anchoring. The proven engine (streaming, model catalog, generated-file parsing, Free Endpoint model handling, plugins, and the Worker) was kept; the app was patched in place without a rewrite.
+This is **v3.1.7**, an iOS focus-composer patch on top of the v3.1.0 UI clarity baseline, v3.1.2 vision attachment support, and v3.1.6 send-scroll polish. The proven engine (streaming, model catalog, generated-file parsing, Free Endpoint model handling, plugins, and the Worker) was kept; the app was patched in place without a rewrite.
 
 ---
 
@@ -65,7 +65,7 @@ index.worker.js
 Commit and wait for Pages to deploy. Then open with a cache-buster:
 
 ```
-https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.1.6
+https://wigglez-sudo.github.io/nvidia-ai-desktop/?v=3.1.7
 ```
 
 If you ever see a stale version again, just click **Clear cache & reload latest** in the Diagnostics panel (bottom-left of the sidebar).
@@ -74,7 +74,7 @@ If you ever see a stale version again, just click **Clear cache & reload latest*
 
 ## Deploy the Cloudflare Worker
 
-The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.1.6. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
+The Worker source is still a single file: **`worker/index.js`**. Its behaviour is unchanged in v3.1.7. **No Worker change is required for this patch** unless you want to redeploy the included copy for consistency.
 
 Copy it to your local Wrangler project and deploy:
 
@@ -118,12 +118,12 @@ Do **not** add `/v1/models`, `/v1/chat/completions`, etc. — the app appends pa
 
 ## Test checklist
 
-After uploading, open the site with `?v=3.1.6` and check:
+After uploading, open the site with `?v=3.1.7` and check:
 
 1. Startup splash appears with `Created by Wigglez + Claude + ChatGPT Codex`.
 2. Splash **Save, Load Models & Enter** saves the NVIDIA key and Worker URL, pulls models, and closes into the app.
 3. Settings → **Update app now** clears service-worker/cache storage and reloads with a fresh cache-buster.
-4. Sidebar name/status (bottom-left) opens **App Status & Tools**; version badge shows `v3.1.6`.
+4. Sidebar name/status (bottom-left) opens **App Status & Tools**; version badge shows `v3.1.7`.
 5. Settings → **Test Connection** loads models.
 6. Model picker → **Refresh**; the **Free Endpoint** and **API Available** tabs have models.
 7. Send a message → a reply renders (this is the path that used to be broken).
@@ -364,4 +364,12 @@ No Cloudflare Worker change is required for this patch unless you want to redepl
 - Sending a prompt now explicitly scrolls the chat to the bottom immediately after the new user and assistant messages render.
 - The streaming-era "do not yank while typing/reading" guard remains in place for subsequent updates.
 - Bumped the service-worker cache to `nvidia-ai-desktop-v3-1-6`.
+- No Cloudflare Worker change is required for this frontend-only patch.
+
+## v3.1.7 — iOS focus composer
+
+- Mobile keyboard-open mode now follows focused composer state directly instead of relying on a large viewport-difference threshold.
+- The composer textarea now caps earlier while the keyboard is open, so long typing cannot inflate the whole input card as aggressively.
+- Added controlled textarea overflow so extra text scrolls inside the field once the mobile cap is reached.
+- Bumped the service-worker cache to `nvidia-ai-desktop-v3-1-7`.
 - No Cloudflare Worker change is required for this frontend-only patch.
