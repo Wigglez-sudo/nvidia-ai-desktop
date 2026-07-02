@@ -3,7 +3,7 @@
  * deploy shows up immediately. Cache is only a fallback for offline use.
  * Bump CACHE_NAME whenever you want to force-drop old caches.
  */
-const CACHE_NAME = 'nvidia-ai-desktop-v3-1-1';
+const CACHE_NAME = 'nvidia-ai-desktop-v3-1-2';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', event => {

@@ -1,6 +1,6 @@
 /* NVIDIA AI Desktop - GitHub Pages / Cloudflare Worker build */
-const APP_VERSION = '3.1.1';
-const BUILD_ID = '2026-07-ios-keyboard-viewport';
+const APP_VERSION = '3.1.2';
+const BUILD_ID = '2026-07-vision-image-attachments';
 const NVIDIA_DIRECT_BASE = 'https://integrate.api.nvidia.com/v1';
 const DEFAULT_PROXY_URL = 'https://nvidia-ai-proxy.lukewai.workers.dev';
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = 45000;
@@ -216,7 +216,7 @@ function stripSlash(url) { return String(url || '').trim().replace(/\/+$/, ''); 
 
 function shortText(value, max = 1200) {
   const text = String(value ?? '');
-  return text.length > max ? text.slice(0, max) + `… [truncated ${text.length - max} chars]` : text;
+  return text.length > max ? text.slice(0, max) + `... [truncated ${text.length - max} chars]` : text;
 }
 
 function modelSupportsReasoning(model) {
@@ -301,7 +301,7 @@ function streamDebugSummary(msg) {
     `${c.jsonEvents || 0} JSON`,
     `${c.contentDeltas || 0} text`,
     `${c.reasoningDeltas || 0} thinking`
-  ].filter(Boolean).join(' • ');
+  ].filter(Boolean).join(' - ');
 }
 
 function streamEventsListHtml(msg) {
@@ -489,6 +489,20 @@ function normalizeChats() {
   });
 }
 
+function chatsForStorage() {
+  return state.chats.map(chat => ({
+    ...chat,
+    messages: (chat.messages || []).map(msg => ({
+      ...msg,
+      attachments: Array.isArray(msg.attachments) ? msg.attachments.map(att => {
+        if (att?.kind !== 'image') return att;
+        const { dataUrl, ...rest } = att;
+        return { ...rest, imageDataPersisted: false };
+      }) : msg.attachments
+    }))
+  }));
+}
+
 function loadState() {
   migrateLegacyStorage();
   state.settings = { ...state.settings, ...loadJson(SETTINGS_KEY, {}) };
@@ -510,7 +524,7 @@ function loadState() {
 function persistSettings() { saveJson(SETTINGS_KEY, state.settings); persistConnectionBackup(); }
 function persistChats() {
   normalizeChats();
-  saveJson(CHATS_KEY, state.chats);
+  saveJson(CHATS_KEY, chatsForStorage());
   if (state.currentChat) localStorage.setItem(CURRENT_CHAT_KEY, state.currentChat.id);
 }
 function persistModels() { saveJson(MODEL_CACHE_KEY, { models: state.liveModels.map(m => m.raw || m), updatedAt: Date.now() }); }
@@ -764,9 +778,9 @@ function renderChatHistory() {
       <svg class="chat-history-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span class="chat-history-title">${escapeHtml(chat.title || 'New Chat')}</span>
       <span class="chat-history-actions">
-        <button class="chat-mini-btn" data-action="pin-chat" data-chat-id="${id}" title="${chat.pinned ? 'Unpin' : 'Pin'}" aria-label="Pin chat">${chat.pinned ? '📌' : '📍'}</button>
-        <button class="chat-mini-btn" data-action="rename-chat" data-chat-id="${id}" title="Rename" aria-label="Rename chat">✎</button>
-        <button class="chat-mini-btn danger" data-action="delete-chat" data-chat-id="${id}" title="Delete" aria-label="Delete chat">×</button>
+        <button class="chat-mini-btn" data-action="pin-chat" data-chat-id="${id}" title="${chat.pinned ? 'Unpin' : 'Pin'}" aria-label="Pin chat">${chat.pinned ? 'PIN' : 'PIN'}</button>
+        <button class="chat-mini-btn" data-action="rename-chat" data-chat-id="${id}" title="Rename" aria-label="Rename chat">EDIT</button>
+        <button class="chat-mini-btn danger" data-action="delete-chat" data-chat-id="${id}" title="Delete" aria-label="Delete chat">x</button>
       </span>
     </div>`;
   }).join('');
@@ -1094,10 +1108,10 @@ function uniqueGeneratedFilename(filename, usedNames) {
 function cleanFilename(value) {
   let name = String(value || '')
     .trim()
-    .replace(/^[-*•\s]+/, '')
+    .replace(/^[-*\s]+/, '')
     .replace(/^['"`]+|['"`]+$/g, '')
     .replace(/^[([]+|[)\]]+$/g, '')
-    .replace(/\s*[:：]\s*$/, '')
+    .replace(/\s*[:]\s*$/, '')
     .replace(/[<>:"|?*]/g, '-')
     .replace(/\\/g, '/');
   name = name.split('/').map(x => x.trim()).filter(Boolean).join('/');
@@ -1366,6 +1380,16 @@ function isSupportedTextFile(file) {
   return type.startsWith('text/') || /\.(txt|md|markdown|json|csv|tsv|py|js|jsx|ts|tsx|html|css|scss|xml|yaml|yml|toml|ini|cfg|conf|log|ps1|bat|cmd|sh|sql|java|c|cpp|h|hpp|cs|go|rs|php|rb|swift|kt|dockerfile|env)$/i.test(name);
 }
 
+function isSupportedImageFile(file) {
+  const name = String(file?.name || '').toLowerCase();
+  const type = String(file?.type || '').toLowerCase();
+  return ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(type) || /\.(png|jpe?g|webp|gif)$/i.test(name);
+}
+
+function attachmentKindLabel(att) {
+  return att?.kind === 'image' ? 'image' : (att?.language || 'text');
+}
+
 function renderPendingAttachments() {
   const el = document.getElementById('pendingAttachments');
   if (!el) return;
@@ -1373,12 +1397,12 @@ function renderPendingAttachments() {
   el.style.display = 'flex';
   el.innerHTML = state.pendingAttachments.map(att => `
     <div class="attachment-chip" title="${escapeAttr(att.name)}">
-      <span class="attachment-icon">📎</span>
+      <span class="attachment-icon">${att.kind === 'image' ? 'IMG' : 'FILE'}</span>
       <div class="attachment-info">
         <div class="attachment-name">${escapeHtml(att.name)}</div>
-        <div class="attachment-meta">${escapeHtml(att.language || 'text')} • ${escapeHtml(formatBytes(att.size))}</div>
+        <div class="attachment-meta">${escapeHtml(attachmentKindLabel(att))} - ${escapeHtml(formatBytes(att.size))}</div>
       </div>
-      <button class="attachment-remove" type="button" data-action="remove-attachment" data-att-id="${escapeAttr(att.id)}" title="Remove attachment">×</button>
+      <button class="attachment-remove" type="button" data-action="remove-attachment" data-att-id="${escapeAttr(att.id)}" title="Remove attachment">x</button>
     </div>`).join('');
 }
 
@@ -1398,18 +1422,37 @@ function attachmentSummaryHtml(attachments = []) {
   if (!attachments.length) return '';
   return `<div class="message-attachments">${attachments.map(att => `
     <div class="message-attachment-card">
-      <span>📎</span>
-      <div><strong>${escapeHtml(att.name)}</strong><br><small>${escapeHtml(att.language || 'text')} • ${escapeHtml(formatBytes(att.size))}</small></div>
+      <span>${att.kind === 'image' ? 'IMG' : 'FILE'}</span>
+      <div><strong>${escapeHtml(att.name)}</strong><br><small>${escapeHtml(attachmentKindLabel(att))} - ${escapeHtml(formatBytes(att.size))}</small></div>
     </div>`).join('')}</div>`;
 }
 
 function attachmentPromptText(attachments = []) {
   if (!attachments.length || !state.settings.plugins.fileReader) return '';
   return attachments.map(att => {
+    if (att.kind === 'image') {
+      if (!att.dataUrl) {
+        return `\n\n[Attached image: ${att.name}\nType: ${att.type || 'image/*'}\nSize: ${formatBytes(att.size)}]\nImage data is no longer available in this reloaded chat. Ask the user to reattach the image if visual details are needed.`;
+      }
+      return `\n\n[Attached image: ${att.name}\nType: ${att.type || 'image/*'}\nSize: ${formatBytes(att.size)}]\nThe image is included as a vision input. Inspect it directly when answering.`;
+    }
     const content = String(att.content || '').slice(0, 200000);
     const truncated = String(att.content || '').length > content.length ? '\n\n[File truncated to 200,000 characters.]' : '';
     return `\n\n[Attached file: ${att.name}\nType: ${att.type || 'text/plain'}\nSize: ${formatBytes(att.size)}]\n\n\`\`\`${att.language || 'text'}\n${content}${truncated}\n\`\`\``;
   }).join('');
+}
+
+function messageContentWithAttachments(baseContent, attachments = []) {
+  const text = String(baseContent || '') + attachmentPromptText(attachments);
+  const images = attachments.filter(att => att?.kind === 'image' && att.dataUrl);
+  if (!images.length) return text;
+  return [
+    { type: 'text', text: text || 'Please review the attached image.' },
+    ...images.map(att => ({
+      type: 'image_url',
+      image_url: { url: att.dataUrl }
+    }))
+  ];
 }
 
 function updateSendButton() {
@@ -1559,7 +1602,7 @@ function buildConversationMessages(extraSystemContext = '') {
     if (m.loading) continue;
     if (m.role === 'user' || m.role === 'assistant') {
       let content = m.role === 'user' ? stripVisibleAttachmentBlocks(m.content || '') : (m.content || '');
-      if (m.role === 'user' && Array.isArray(m.attachments) && m.attachments.length) content += attachmentPromptText(m.attachments);
+      if (m.role === 'user' && Array.isArray(m.attachments) && m.attachments.length) content = messageContentWithAttachments(content, m.attachments);
       messages.push({ role: m.role, content });
     }
   }
@@ -2085,7 +2128,7 @@ async function fetchBuildCatalogModels() {
 
 async function refreshModelsFromNvidia(manual = false) {
   if (!state.settings.apiKey) { showToast('Add your API key first.', 'error'); openSettings(); return 0; }
-  setModelMeta('Refreshing NVIDIA API models and Build catalog…');
+  setModelMeta('Refreshing NVIDIA API models and Build catalog...');
   try {
     const response = await fetchWithTimeout(buildApiUrl('/models'), { method: 'GET', headers: apiHeaders(false) }, 45000);
     if (!response.ok) throw new Error(await errorFromResponse(response));
@@ -2110,8 +2153,8 @@ async function refreshModelsFromNvidia(manual = false) {
     renderModelList(); updateSelectedModelLabel(); updateStatus(); updateSendButton();
 
     const freeCount = state.liveModels.filter(m => m.capabilities?.includes('free_endpoint')).length;
-    const catalogNote = catalog.ok ? ` • ${catalog.models.length} Build catalog models merged` : ` • Build catalog unavailable${catalog.message ? ': ' + catalog.message : ''}`;
-    setModelMeta(`${apiModels.length} API models • ${state.liveModels.length} shown • ${freeCount} Free Endpoint${catalogNote}`);
+    const catalogNote = catalog.ok ? ` - ${catalog.models.length} Build catalog models merged` : ` - Build catalog unavailable${catalog.message ? ': ' + catalog.message : ''}`;
+    setModelMeta(`${apiModels.length} API models - ${state.liveModels.length} shown - ${freeCount} Free Endpoint${catalogNote}`);
     if (manual) showToast(`Loaded ${state.liveModels.length} models (${freeCount} Free Endpoint)`);
     return state.liveModels.length;
   } catch (err) {
@@ -2158,7 +2201,7 @@ function renderModelList() {
     const status = m.catalogOnly ? 'Catalog only' : m.capabilities?.includes('free_endpoint') ? 'Free API' : m.capabilities?.includes('api') ? 'API ready' : 'Live';
     const marker = state.favourites.has(m.id) ? 'Favorite' : recent.has(m.id) ? 'Recent' : '';
     return `<div class="model-item ${current?.id === m.id ? 'selected' : ''}" data-action="select-model" data-model-id="${escapeAttr(m.id)}">
-      <button class="model-star ${state.favourites.has(m.id) ? 'active' : ''}" data-action="toggle-fav" data-model-id="${escapeAttr(m.id)}" title="Favourite">${state.favourites.has(m.id) ? '★' : '☆'}</button>
+      <button class="model-star ${state.favourites.has(m.id) ? 'active' : ''}" data-action="toggle-fav" data-model-id="${escapeAttr(m.id)}" title="Favourite">${state.favourites.has(m.id) ? '*' : '+'}</button>
       <div class="model-item-info">
         <div class="model-item-title-row"><div class="model-item-name">${escapeHtml(m.name)}</div><span class="model-status-pill">${escapeHtml(status)}</span></div>
         <div class="model-item-desc"><code>${escapeHtml(m.id)}</code></div>
@@ -2364,7 +2407,7 @@ function importSettings() {
 }
 async function testConnection() {
   saveSettings();
-  showConnectionStatus('Testing connection…', true);
+  showConnectionStatus('Testing connection...', true);
   const count = await refreshModelsFromNvidia(false);
   if (count) {
     state.lastConnection = { ok: true, at: Date.now(), count };
@@ -2411,11 +2454,11 @@ function ensurePanelElements() {
     panel = document.createElement('div');
     panel.id = 'sidePanel';
     panel.className = 'side-panel';
-    panel.innerHTML = '<div class="panel-header"><div class="panel-title" id="panelTitle">Panel</div><button class="panel-close" data-action="close-panel">×</button></div><div class="panel-body" id="panelBody"></div>';
+    panel.innerHTML = '<div class="panel-header"><div class="panel-title" id="panelTitle">Panel</div><button class="panel-close" data-action="close-panel">x</button></div><div class="panel-body" id="panelBody"></div>';
     document.body.appendChild(panel);
   }
   if (!document.getElementById('panelTitle')) {
-    panel.innerHTML = '<div class="panel-header"><div class="panel-title" id="panelTitle">Panel</div><button class="panel-close" data-action="close-panel">×</button></div><div class="panel-body" id="panelBody"></div>';
+    panel.innerHTML = '<div class="panel-header"><div class="panel-title" id="panelTitle">Panel</div><button class="panel-close" data-action="close-panel">x</button></div><div class="panel-body" id="panelBody"></div>';
   }
 }
 
@@ -2521,7 +2564,7 @@ async function testWebSearchPlugin() {
   const p = state.settings.plugins;
   if (!p.webSearch) { showPluginTestStatus('Turn Web Search on first.', false); return; }
   if (!p.webSearchApiKey && p.webSearchProvider !== 'worker-secret') { showPluginTestStatus('Add a Brave/Tavily search API key first.', false); return; }
-  showPluginTestStatus('Testing web search…', true);
+  showPluginTestStatus('Testing web search...', true);
   try {
     const results = await runWebSearch('NVIDIA latest AI models');
     showPluginTestStatus(`Web Search OK. Found ${results.length} result(s).\n${results.slice(0, 3).map((r, i) => `${i + 1}. ${r.title}`).join('\n')}`, true);
@@ -2604,7 +2647,7 @@ function showDiagStatus(text, success) {
 async function probeWorker() {
   const base = stripSlash(state.settings.proxyUrl);
   if (!base) { showDiagStatus('No proxy URL set. Add your Cloudflare Worker URL in Settings.', false); return; }
-  showDiagStatus('Probing Worker…', true);
+  showDiagStatus('Probing Worker...', true);
   try {
     const res = await fetchWithTimeout(base + '/', { method: 'GET' }, 20000);
     const data = await res.json();
@@ -2618,7 +2661,7 @@ async function probeWorker() {
 }
 
 async function diagTestModels() {
-  showDiagStatus('Testing /v1/models…', true);
+  showDiagStatus('Testing /v1/models...', true);
   const n = await refreshModelsFromNvidia(false);
   if (n) { showDiagStatus(`Models OK. Loaded ${n} live models.`, true); openStatusPanel(); }
   else showDiagStatus('Models test failed. Check API key and Worker URL.', false);
@@ -2647,7 +2690,7 @@ async function diagTestChat() {
   }
 }
 async function diagTestCatalog() {
-  showDiagStatus('Testing /v1/build-models…', true);
+  showDiagStatus('Testing /v1/build-models...', true);
   const res = await fetchBuildCatalogModels();
   if (res.ok) showDiagStatus(`Build catalog OK. ${res.models.length} models, ${res.freeEndpointCount || 0} Free Endpoint.`, true);
   else showDiagStatus(`Build catalog failed: ${res.message || 'unknown error'}`, false);
@@ -2677,7 +2720,7 @@ function clearAllLocalData() {
     for (const k of listLegacyKeys()) localStorage.removeItem(k);
     deleteCookie(SETTINGS_SECRET_BACKUP_KEY);
   } catch (_) {}
-  showToast('Local data cleared. Reloading…');
+  showToast('Local data cleared. Reloading...');
   setTimeout(() => location.reload(), 600);
 }
 
@@ -2720,6 +2763,7 @@ async function clearCacheAndReload(triggerEl) {
 
 
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_ATTACHMENT_BYTES = 6 * 1024 * 1024;
 const MAX_PENDING_ATTACHMENTS = 10;
 
 function attachmentLanguageForFile(name) {
@@ -2745,6 +2789,15 @@ function readFileAsTextPromise(file) {
   });
 }
 
+function readFileAsDataUrlPromise(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error(`Could not read ${file?.name || 'file'}`));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function addFilesToPending(fileList) {
   const files = Array.from(fileList || []).filter(Boolean);
   if (!files.length) return;
@@ -2762,6 +2815,29 @@ async function addFilesToPending(fileList) {
 
     if (state.pendingAttachments.length >= MAX_PENDING_ATTACHMENTS) {
       skipped.push(`${name} (maximum ${MAX_PENDING_ATTACHMENTS} attachments)`);
+      continue;
+    }
+
+    if (isSupportedImageFile(file)) {
+      if (file.size > MAX_IMAGE_ATTACHMENT_BYTES) {
+        skipped.push(`${name} (image over 6 MB)`);
+        continue;
+      }
+
+      try {
+        const dataUrl = await readFileAsDataUrlPromise(file);
+        state.pendingAttachments.push({
+          id: uid('att'),
+          kind: 'image',
+          name,
+          size: file.size,
+          type: file.type || 'image/*',
+          dataUrl
+        });
+        added++;
+      } catch (err) {
+        skipped.push(`${name} (could not read image)`);
+      }
       continue;
     }
 
@@ -2798,7 +2874,7 @@ async function addFilesToPending(fileList) {
     showToast(`Attached ${added} file${added === 1 ? '' : 's'}. Content will be sent privately with your prompt.`);
   }
   if (skipped.length) {
-    showToast(`Skipped ${skipped.length} file${skipped.length === 1 ? '' : 's'}: ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''}`, 'error');
+    showToast(`Skipped ${skipped.length} file${skipped.length === 1 ? '' : 's'}: ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '...' : ''}`, 'error');
   }
 }
 
@@ -2884,7 +2960,7 @@ function toggleSidebar() {
 
 function showToast(text, type = 'success') {
   const c = document.getElementById('toastContainer'); if (!c) return;
-  const t = document.createElement('div'); t.className = `toast ${type}`; t.innerHTML = `<div class="toast-icon">${type === 'error' ? '⚠️' : '✓'}</div><div class="toast-text">${escapeHtml(text)}</div>`; c.appendChild(t); setTimeout(() => t.remove(), 3500);
+  const t = document.createElement('div'); t.className = `toast ${type}`; t.innerHTML = `<div class="toast-icon">${type === 'error' ? '!' : 'OK'}</div><div class="toast-text">${escapeHtml(text)}</div>`; c.appendChild(t); setTimeout(() => t.remove(), 3500);
 }
 
 function safeRun(label, fn) {
@@ -2914,10 +2990,10 @@ async function diagTestSearch() {
   const p = state.settings.plugins;
   if (!p.webSearch) { showDiagStatus('Turn Web Search on in Plugins first.', false); return; }
   if (!p.webSearchApiKey && p.webSearchProvider !== 'worker-secret') { showDiagStatus('Add a Brave/Tavily key or use the Worker-secret option.', false); return; }
-  showDiagStatus('Testing web search…', true);
+  showDiagStatus('Testing web search...', true);
   try {
     const results = await runWebSearch('NVIDIA latest AI models');
-    showDiagStatus(`Web search OK. ${results.length} result(s). Top: ${results[0]?.title || '—'}`, true);
+    showDiagStatus(`Web search OK. ${results.length} result(s). Top: ${results[0]?.title || '-'}`, true);
   } catch (err) {
     showDiagStatus(`Web search failed: ${friendlyError(err)}`, false);
   }
