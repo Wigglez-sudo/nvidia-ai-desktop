@@ -24,12 +24,12 @@ Final release: `v3.2.0`
 
 | Area | What it includes |
 | --- | --- |
-| Chat | Streaming replies, stop response, regenerate, edit, copy, download, and persistent chat history. |
-| Models | Live NVIDIA model loading, Free Endpoint fallback tags, favourites, recents, search, and capability badges. |
+| Chat | Streaming replies, stop response, regenerate, edit, copy, download, chat search, draft restore, and persistent chat history. |
+| Models | Live NVIDIA model loading, Free Endpoint fallback tags, favourites, recents, search, grouped results, and capability badges. |
 | iOS | PWA support, safe-area handling, fixed keyboard/composer behavior, and touch-friendly chat deletion. |
 | Files | Text/code/data/image attachments, hidden upload content where possible, generated-file detection, per-file download, and ZIP export. |
 | Plugins | Web Search, File Reader, Download Buttons, Prefer File Outputs, Artifact Preview, Thinking Display, and Long Context. |
-| Diagnostics | Worker probe, model tests, current-model test, web-search test, build-catalog test, debug export, cache clear, and local-data cleanup. |
+| Diagnostics | Worker probe, model tests, current-model test, web-search test, build-catalog test, debug export, cache clear, local-data cleanup, and current-chat search. |
 | Security | No hard-coded API keys. Keys stay in browser storage and requests go through the Cloudflare Worker. |
 
 ## Final Release
@@ -38,6 +38,8 @@ Final release: `v3.2.0`
 - iOS composer now wraps downward correctly for long prompts.
 - Individual chat delete buttons now work as real touch targets on iPhone.
 - The default personal name was removed from the UI. Users can choose their own display name in Settings.
+- Composer drafts now restore per chat after refresh or chat switching.
+- App Status now includes a quick find-in-chat search for the current conversation.
 - The chat engine, model loading, plugins, file handling, diagnostics, and generated-file downloads were kept intact.
 - API keys stay out of source code and are stored only in the browser.
 

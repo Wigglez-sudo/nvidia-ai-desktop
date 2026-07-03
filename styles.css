@@ -1095,6 +1095,11 @@ button, input, textarea, select { font: inherit; }
   background: var(--bg-secondary); border: 1px solid var(--border-color);
   border-radius: var(--radius-md); padding: 10px 12px; color: var(--text-secondary);
 }
+.message-highlight {
+  outline: 2px solid rgba(118,185,0,.45);
+  box-shadow: 0 0 0 1px rgba(118,185,0,.25), 0 10px 24px rgba(118,185,0,.08);
+  border-radius: 16px;
+}
 
 /* Drag-and-drop attachment support */
 .input-wrapper.drag-over {
@@ -1508,6 +1513,33 @@ body.dragging-files::after {
 .guide-row h4 { margin: 0 0 3px; font-size: 13px; }
 .guide-row p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
 .guide-row small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.35; }
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search-result-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+.search-result-card:hover { border-color: rgba(118,185,0,.45); background: rgba(118,185,0,.06); }
+.search-result-card strong { font-size: 13px; }
+.search-result-card span { color: var(--text-secondary); font-size: 12px; line-height: 1.35; }
+.empty-note {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 4px 2px 0;
+}
 .tool-list { display: grid; gap: 8px; }
 .tool-card {
   text-align: left;

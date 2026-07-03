@@ -196,6 +196,8 @@ const state = {
   openThinking: new Set(),
   openRawDebug: new Set(),
   chatSearch: '',
+  chatMessageSearch: '',
+  draftSaveTimer: null,
   loadedAt: '',
   diag: { swStatus: 'unknown', workerRoutes: [], workerVersion: '', lastStatus: '', lastContentType: '', lastEvents: null, lastError: '' }
 };
@@ -500,6 +502,7 @@ function normalizeChats() {
     seen.add(chat.id);
     if (!Array.isArray(chat.messages)) chat.messages = [];
     if (!chat.title) chat.title = 'New Chat';
+    if (typeof chat.draft !== 'string') chat.draft = '';
     return true;
   });
 }
@@ -534,6 +537,7 @@ function loadState() {
   normalizeChats();
   const currentId = localStorage.getItem(CURRENT_CHAT_KEY);
   state.currentChat = state.chats.find(c => c.id === currentId) || state.chats[0] || createChat(false);
+  if (state.currentChat && typeof state.currentChat.draft !== 'string') state.currentChat.draft = '';
   applyTheme();
 }
 
@@ -732,16 +736,19 @@ function isAbortLike(err) {
 }
 
 function createChat(persist = true) {
-  const chat = { id: uid('chat'), title: 'New Chat', createdAt: Date.now(), messages: [] };
+  const chat = { id: uid('chat'), title: 'New Chat', createdAt: Date.now(), messages: [], draft: '' };
   state.chats.unshift(chat);
   if (persist) persistChats();
   return chat;
 }
 
 function newChat() {
+  captureComposerDraft();
   state.currentChat = createChat();
   state.editingMessageId = null;
+  state.chatMessageSearch = '';
   renderAll();
+  restoreComposerDraft();
 }
 
 function renderModeNav() {
@@ -854,10 +861,13 @@ function clearAllChats() {
 function selectChat(id) {
   const chat = state.chats.find(c => c.id === id);
   if (!chat) return;
+  captureComposerDraft();
   state.currentChat = chat;
   state.editingMessageId = null;
+  state.chatMessageSearch = '';
   persistChats();
   renderAll();
+  restoreComposerDraft();
 }
 
 function welcomeHtml() {
@@ -1603,6 +1613,7 @@ async function sendMessage(overrideText = null) {
   if (!state.settings.apiKey) { showToast('Add your NVIDIA API key in Settings first.', 'error'); openSettings(); return; }
   const model = getCurrentModel();
   if (!model) { showToast('Refresh and select a live NVIDIA model first.', 'error'); toggleModelDropdown(); return; }
+  saveComposerDraft(text);
 
   let userMsg;
   if (state.editingMessageId) {
@@ -1620,7 +1631,12 @@ async function sendMessage(overrideText = null) {
     state.currentChat.messages.push(userMsg);
   }
 
-  if (input && overrideText === null) { input.value = ''; autoResize(input); clearPendingAttachments(); }
+  if (input && overrideText === null) {
+    input.value = '';
+    autoResize(input);
+    clearPendingAttachments();
+    saveComposerDraft('');
+  }
   if (state.currentChat.messages.filter(m => m.role === 'user').length === 1) state.currentChat.title = text.slice(0, 42) || 'New Chat';
 
   const assistantMsg = { id: uid('msg'), role: 'assistant', content: '', thinking: '', loading: true, time: nowTime(), model: model.name, mode: getMode().key };
@@ -2385,6 +2401,74 @@ function updateSelectedModelLabel() {
   if (label) label.textContent = model ? model.name : 'Load models';
 }
 
+function saveComposerDraft(text = '') {
+  if (!state.currentChat) return;
+  state.currentChat.draft = String(text || '');
+  clearTimeout(state.draftSaveTimer);
+  state.draftSaveTimer = setTimeout(() => persistChats(), 250);
+}
+
+function captureComposerDraft() {
+  const input = document.getElementById('inputBox');
+  if (input) saveComposerDraft(input.value);
+}
+
+function restoreComposerDraft() {
+  const input = document.getElementById('inputBox');
+  if (!input) return;
+  const draft = state.currentChat?.draft || '';
+  input.value = draft;
+  autoResize(input);
+  updateSendButton();
+}
+
+function currentChatSearchResults(query = '') {
+  const q = String(query || '').trim().toLowerCase();
+  const msgs = state.currentChat?.messages || [];
+  if (!q) return [];
+  return msgs
+    .map((msg, idx) => {
+      const hay = `${msg.role || ''} ${stripVisibleAttachmentBlocks(msg.content || '')} ${msg.thinking || ''}`.toLowerCase();
+      if (!hay.includes(q)) return null;
+      const raw = stripVisibleAttachmentBlocks(msg.content || '').replace(/\s+/g, ' ').trim();
+      const hitIndex = Math.max(hay.indexOf(q), 0);
+      const snippetSource = `${raw} ${String(msg.thinking || '').replace(/\s+/g, ' ').trim()}`.trim();
+      const snippet = snippetSource ? shortText(snippetSource, 160) : '';
+      return {
+        id: msg.id,
+        role: msg.role,
+        title: msg.role === 'user' ? 'User message' : 'Assistant message',
+        snippet,
+        index: idx,
+        hitIndex
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function renderStatusChatSearchResults() {
+  const el = document.getElementById('chatMessageSearchResults');
+  if (!el) return;
+  const messageSearch = state.chatMessageSearch || '';
+  const results = currentChatSearchResults(messageSearch);
+  el.innerHTML = messageSearch
+    ? (results.length
+      ? `<div class="search-results-list">${results.map(r => `<button class="search-result-card" data-action="jump-to-message" data-message-id="${escapeAttr(r.id)}"><strong>${escapeHtml(r.title)}</strong><span>${escapeHtml(r.snippet || 'Matched content')}</span></button>`).join('')}</div>`
+      : `<div class="empty-note">No messages matched “${escapeHtml(messageSearch)}”.</div>`)
+    : `<div class="empty-note">Type a word or phrase to search the current chat.</div>`;
+  const input = document.getElementById('chatMessageSearchInput');
+  if (input && input.value !== messageSearch) input.value = messageSearch;
+}
+
+function scrollToMessage(id) {
+  const el = document.getElementById(`msg_${id}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('message-highlight');
+  setTimeout(() => el.classList.remove('message-highlight'), 1800);
+}
+
 function setSplashStatus(text, success = true) {
   const el = document.getElementById('splashStatus');
   if (!el) return;
@@ -2748,9 +2832,16 @@ function openStatusPanel() {
     <div class="panel-section-label">Maintenance</div>
     <div class="btn-row"><button class="btn btn-secondary" data-action="new-chat-close">New chat</button><button class="btn btn-secondary" data-action="export-debug">Export debug logs</button><button class="btn btn-secondary" data-action="export-settings">Export settings</button><button class="btn btn-secondary" data-action="import-settings">Import settings</button></div>
     <div class="btn-row"><button class="btn btn-primary" data-action="clear-cache">Clear cache &amp; reload latest</button></div>
+    <div class="panel-section-label">Find in chat</div>
+    <div class="mode-help-card">
+      <p>Search the currently open conversation without leaving the chat view. This is handy for long threads, file blocks, or troubleshooting history.</p>
+      <input class="setting-input" type="search" id="chatMessageSearchInput" placeholder="Search this chat..." value="${escapeAttr(state.chatMessageSearch || '')}" data-action="chat-message-search" autocomplete="off" spellcheck="false">
+      <div id="chatMessageSearchResults" style="margin-top:10px;"></div>
+    </div>
     <div class="panel-section-label danger-zone-label">Danger zone</div>
     <div class="btn-row"><button class="btn btn-danger" data-action="delete-all-chats">Delete all chats</button><button class="btn btn-danger" data-action="clear-key-close">Clear API key</button><button class="btn btn-danger" data-action="clear-all-data">Clear all local data</button></div>`;
   openPanel('App Status & Tools', html);
+  renderStatusChatSearchResults();
 }
 function showDiagStatus(text, success) {
   const el = document.getElementById('diagTestStatus');
@@ -3165,6 +3256,7 @@ const CLICK_ACTIONS = {
   'model-tab': (el) => switchModelTab(el.dataset.tab, el),
   'set-mode': (el) => { setMode(el.dataset.mode); maybeCollapseSidebarMobile(); },
   'select-chat': (el) => { selectChat(el.dataset.chatId); maybeCollapseSidebarMobile(); },
+  'jump-to-message': (el) => scrollToMessage(el.dataset.messageId),
   'pin-chat': (el) => pinChat(el.dataset.chatId),
   'rename-chat': (el) => renameChat(el.dataset.chatId),
   'delete-chat': (el) => deleteChat(el.dataset.chatId),
@@ -3226,6 +3318,7 @@ function registerDelegatedEvents() {
     if (action === 'plugin-set-input') setPluginSetting(el.dataset.key, el.value, false);
     else if (action === 'model-search') renderModelList();
     else if (action === 'chat-search') { state.chatSearch = el.value; renderChatHistory(); }
+    else if (action === 'chat-message-search') { state.chatMessageSearch = el.value; renderStatusChatSearchResults(); }
     else if (action === 'temp-slider') { const out = document.getElementById('tempValue'); if (out) out.textContent = el.value; }
   });
 
@@ -3283,7 +3376,13 @@ function bindInputHandlers() {
   const input = document.getElementById('inputBox');
   if (input) {
     input.addEventListener('keydown', handleKeydown);
-    input.addEventListener('input', () => { autoResize(input); updateSendButton(); syncVisualViewportVars(); syncComposerMetrics(); });
+    input.addEventListener('input', () => {
+      autoResize(input);
+      updateSendButton();
+      saveComposerDraft(input.value);
+      syncVisualViewportVars();
+      syncComposerMetrics();
+    });
     input.addEventListener('focus', () => setTimeout(() => { syncVisualViewportVars(); syncComposerMetrics(); }, 80));
     input.addEventListener('blur', () => setTimeout(() => { syncVisualViewportVars(); syncComposerMetrics(); }, 120));
   }
@@ -3344,6 +3443,7 @@ function init() {
   registerFileDropZone();
   if (isMobile()) collapseSidebar();
   renderAll();
+  restoreComposerDraft();
   setTimeout(syncComposerMetrics, 0);
   registerServiceWorker();
   if (shouldShowSplash()) openSplash();
