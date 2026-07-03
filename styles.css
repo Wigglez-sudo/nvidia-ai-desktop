@@ -1178,6 +1178,9 @@ body.dragging-files::after {
 .generated-file-actions .file-btn {
   min-width: 72px;
 }
+.generated-files-buttons .file-btn {
+  white-space: nowrap;
+}
 .preview-hint {
   display: block;
   padding: 0 12px 10px;

@@ -1019,6 +1019,9 @@ function generatedFilesPanelHtml(text) {
   const allPayloadId = storeGeneratedPayload(allPayload);
   const canPreview = state.settings.plugins.artifactPreview && canPreviewFiles(allPayload);
   const sublabel = `${files.length} file${files.length === 1 ? '' : 's'} ready to copy or download`;
+  const headerTools = files.length > 1
+    ? `<button class="file-btn" data-action="toggle-generated-source" data-state="open">Expand all</button><button class="file-btn" data-action="toggle-generated-source" data-state="close">Collapse all</button>`
+    : '';
   const cards = files.map(f => {
     const singlePayloadId = storeGeneratedPayload({ filename: f.filename, code: f.code, lang: f.lang });
     const kind = fileKind(f);
@@ -1039,7 +1042,7 @@ function generatedFilesPanelHtml(text) {
   const multi = files.length > 1
     ? `${previewButton}<button class="file-btn" data-action="open-artifacts" data-payload-id="${allPayloadId}">Open drawer</button><button class="file-btn" data-action="copy-all-files" data-payload-id="${allPayloadId}">Copy all</button><button class="file-btn primary" data-action="download-zip" data-payload-id="${allPayloadId}">Download ZIP</button>`
     : `${previewButton}<button class="file-btn" data-action="open-artifacts" data-payload-id="${allPayloadId}">Open drawer</button><button class="file-btn primary" data-action="download-all-files" data-payload-id="${allPayloadId}">Download</button>`;
-  return `<div class="generated-files-panel"><div class="generated-files-header"><div><strong>Generated Files</strong><span>${sublabel}</span></div><div class="generated-files-buttons">${multi}</div></div>${cards}</div>`;
+  return `<div class="generated-files-panel"><div class="generated-files-header"><div><strong>Generated Files</strong><span>${sublabel}</span></div><div class="generated-files-buttons">${headerTools}${multi}</div></div>${cards}</div>`;
 }
 
 function fileKind(file = {}) {
@@ -1077,6 +1080,13 @@ function buildArtifactPreviewHtml(files = []) {
   if (injectedJs) html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${injectedJs}\n</body>`) : `${html}\n${injectedJs}`;
   return html;
 }
+
+function toggleGeneratedSource(open = true) {
+  document.querySelectorAll('.generated-source-details').forEach(details => {
+    details.open = !!open;
+  });
+}
+
 function renderMarkdown(text, options = {}) {
   let src = String(text || '');
   const codeBlocks = [];
@@ -2329,7 +2339,7 @@ function renderModelList() {
         <div class="model-item-title-row"><div class="model-item-name">${escapeHtml(m.name)}</div><span class="model-status-pill">${escapeHtml(status)}</span></div>
         <div class="model-item-desc"><code>${escapeHtml(m.id)}</code></div>
         ${marker ? `<div class="model-item-desc">${escapeHtml(marker)}</div>` : ''}
-        ${notes.length ? `<div class="model-item-note">${escapeHtml(notes.join(' Â· '))}</div>` : ''}
+        ${notes.length ? `<div class="model-item-note">${escapeHtml(notes.join(' · '))}</div>` : ''}
         ${capabilityHtml(m)}
       </div>
     </div>`;
@@ -3290,6 +3300,7 @@ const CLICK_ACTIONS = {
   'copy-all-files': (el) => copyAllEncodedFiles(readGeneratedPayloadFromElement(el)),
   'open-artifacts': (el) => openArtifactsDrawer(readGeneratedPayloadFromElement(el)),
   'preview-artifacts': (el) => previewArtifacts(readGeneratedPayloadFromElement(el)),
+  'toggle-generated-source': (el) => toggleGeneratedSource(el.dataset.state === 'open'),
   'remove-attachment': (el) => removePendingAttachment(el.dataset.attId),
   'toggle-fav': (el, ev) => toggleFavourite(el.dataset.modelId, ev),
   'select-model': (el) => selectModel(el.dataset.modelId),
